@@ -34,7 +34,7 @@ import { IMAGE_CONCURRENCY, needsImage, runPool, withPendingImage, type ImageTar
 import type { Frame, ImageKind, Person, Project, Scene, Thing } from '@/types/project';
 
 const DEFAULT_IDEA =
-  'A barista discovers their latte art comes alive at midnight and starts a tiny revolution in the coffee shop.';
+  'A courier is late for a delivery and takes a shortcut off a balcony.';
 
 export type ProjectContextValue = {
   project: Project;

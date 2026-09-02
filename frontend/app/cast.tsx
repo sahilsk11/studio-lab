@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -13,39 +13,21 @@ import {
   View,
 } from 'react-native';
 
-import {
-  AppHeader,
-  Body,
-  Button,
-  Callout,
-  CaptionStrong,
-  Container,
-  CONTENT_MAX_WIDTH,
-  Eyebrow,
-  GlassCard,
-  Mono,
-  ProgressCard,
-  Screen,
-  SheetFrame,
-  StatusBadge,
-  StepRail,
-  Title,
-} from '@/components/ui';
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
+import { AppHeader, Button, Container, Screen, StepRail } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
-import { confirm } from '@/lib/confirm';
-import { castItems, imageProgress, needsImage } from '@/lib/project';
+import { castItems, imageProgress } from '@/lib/project';
 import type { Person, Thing } from '@/types/project';
 
-const H_PAD = theme.space.xl;
-const GAP = theme.space.md;
-const PERSON_VIEWS = ['Torso', 'Back', 'Face'] as const;
+type CastSelection =
+  | { kind: 'person'; item: Person }
+  | { kind: 'thing'; item: Thing };
 
 export default function CastScreen() {
   const router = useRouter();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const {
     project,
     hydrated,
@@ -56,68 +38,80 @@ export default function CastScreen() {
     generateAllCastImages,
     generateScenes,
     generateAllSceneImages,
-    generateCast,
     generateImage,
     updateItem,
     removeItem,
   } = useProject();
   const { settings, tap } = useSettings();
-  const [advancing, setAdvancing] = useState(false);
-  const [redoing, setRedoing] = useState(false);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [kept, setKept] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<EditorTarget | null>(null);
+  const [advancing, setAdvancing] = useState(false);
 
-  const contentWidth = Math.min(windowWidth, CONTENT_MAX_WIDTH);
-  const columns = contentWidth >= 620 ? 2 : 1;
-  const cardWidth = (contentWidth - H_PAD * 2 - GAP * (columns - 1)) / columns;
-
+  const compact = width < 700;
+  const desktop = width >= 900;
   const empty = project.people.length === 0 && project.things.length === 0;
+  const items = useMemo<CastSelection[]>(
+    () => [
+      ...project.people.map((item) => ({ kind: 'person' as const, item })),
+      ...project.things.map((item) => ({ kind: 'thing' as const, item })),
+    ],
+    [project.people, project.things],
+  );
+  const selected = items.find(({ kind, item }) => `${kind}:${item.id}` === selectedKey) ?? items[0];
   const progress = imageProgress(castItems(project));
-  const needsWork = progress.pending + progress.stale + progress.errors;
-  const allReady = progress.total > 0 && needsWork === 0 && progress.generating === 0;
-  const showRender = needsWork > 0;
+  const pending = progress.pending + progress.stale + progress.errors;
 
   useEffect(() => {
     if (!hydrated) return;
     if (empty && !testMode) router.replace('/');
-  }, [hydrated, empty, testMode, router]);
+  }, [empty, hydrated, router, testMode]);
 
-  function handleGenerateAll() {
-    void generateAllCastImages();
-  }
-
-  async function handleRedo() {
-    const ok = await confirm({
-      title: 'Redo people and things?',
-      message:
-        'The model will draft a new cast from your idea. Scenes, frames, and video are cleared.',
-      confirmLabel: 'Redo cast',
-      destructive: true,
-    });
-    if (!ok) return;
-    setRedoing(true);
-    try {
-      await generateCast({ replace: true });
-      tap('success');
-    } finally {
-      setRedoing(false);
+  useEffect(() => {
+    if (
+      items[0] &&
+      !items.some(({ kind, item }) => `${kind}:${item.id}` === selectedKey)
+    ) {
+      setSelectedKey(`${items[0].kind}:${items[0].item.id}`);
     }
+  }, [items, selectedKey]);
+
+  function keyFor(selection: CastSelection) {
+    return `${selection.kind}:${selection.item.id}`;
   }
 
-  async function handleNext() {
+  function generate(selection: CastSelection) {
+    if (selection.kind === 'person') return generatePersonImage(selection.item.id);
+    return generateThingImage(selection.item.id);
+  }
+
+  function toggleKeep(selection: CastSelection) {
+    const key = keyFor(selection);
+    tap('medium');
+    setKept((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function openPlaces() {
+    if (advancing) return;
     setAdvancing(true);
     try {
-      await generateScenes({ replace: true });
+      if (project.scenes.length === 0) await generateScenes({ replace: true });
       tap('success');
-      router.push('/scenes');
-      if (settings.autoGenerateImages) generateAllSceneImages();
+      router.push('/places');
+      if (settings.autoGenerateImages) void generateAllSceneImages();
     } finally {
       setAdvancing(false);
     }
   }
 
-  if (!hydrated || (empty && !testMode)) {
+  if (!hydrated || !selected) {
     return (
-      <Screen header={<AppHeader title="Cast" onBack={() => router.push('/')} />}>
+      <Screen header={<AppHeader title="Cast" onBack={() => router.push('/interview')} />}>
         <View style={styles.loading}>
           <ActivityIndicator color={theme.textSecondary} />
         </View>
@@ -127,129 +121,158 @@ export default function CastScreen() {
 
   return (
     <Screen
-      header={<AppHeader title="Cast" onBack={() => router.push('/')} />}
+      header={
+        <AppHeader
+          title={project.title || 'Cast'}
+          onBack={() => router.push('/interview')}
+          right={
+            pending > 0 ? (
+              <Button
+                label={`Render ${pending}`}
+                size="sm"
+                variant="secondary"
+                inline
+                onPress={() => void generateAllCastImages()}
+              />
+            ) : undefined
+          }
+        />
+      }
       footer={
-        <>
-          {showRender ? (
-            <Button
-              label={`Render ${needsWork} sheet${needsWork === 1 ? '' : 's'}`}
-              icon="sparkles"
-              size="lg"
-              onPress={handleGenerateAll}
-            />
-          ) : (
-            <Button
-              label="Next: scenes"
-              icon="arrow-forward"
-              size="lg"
-              disabled={!allReady || advancing}
-              loading={advancing}
-              onPress={handleNext}
-            />
-          )}
-        </>
+        <View style={[styles.footer, compact && styles.footerCompact]}>
+          <Button
+            label="Next: Places"
+            iconRight="arrow-forward"
+            size="lg"
+            inline={!compact}
+            loading={advancing}
+            disabled={advancing}
+            onPress={() => void openPlaces()}
+          />
+          <Text style={styles.footerNote}>
+            {kept.size > 0
+              ? `${kept.size} of ${items.length} kept`
+              : 'You can tune or render any card later.'}
+          </Text>
+        </View>
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={styles.stack}>
-          <GlassCard radius={theme.radius.md}>
-            <View style={styles.railInner}>
-              <StepRail current="Cast" />
-            </View>
-          </GlassCard>
-
-          <View style={styles.heading}>
-            <View style={styles.headingTop}>
-              <Title numberOfLines={2} style={styles.headingTitle}>
-                {project.title || 'Cast'}
-              </Title>
-              <Button
-                label="Redo"
-                variant="ghost"
-                size="sm"
-                inline
-                icon="refresh-outline"
-                loading={redoing}
-                disabled={redoing || advancing}
-                onPress={() => void handleRedo()}
-              />
-            </View>
-            <View style={styles.metaRow}>
-              {project.people.length > 0 ? (
-                <MetaPill icon="people-outline" label={`${project.people.length} people`} />
-              ) : null}
-              {project.things.length > 0 ? (
-                <MetaPill icon="cube-outline" label={`${project.things.length} things`} />
-              ) : null}
-              <MetaPill icon="color-palette-outline" label={project.style} />
-              <MetaPill icon="time-outline" label={`${project.durationSec}s`} />
-              {settings.showCosts && project.totalCost > 0 ? (
-                <MetaPill icon="cash-outline" label={`$${project.totalCost.toFixed(2)}`} />
-              ) : null}
-            </View>
+        <Container style={[styles.container, desktop && styles.containerDesktop]}>
+          <View style={[styles.railCard, desktop && styles.railCardDesktop]}>
+            <StepRail current="Cast" orientation={desktop ? 'vertical' : 'horizontal'} />
           </View>
 
-          <ProgressCard
-            label="Sheets ready"
-            value={progress.done}
-            total={progress.total}
-            detail={
-              progress.generating > 0
-                ? `Rendering ${progress.generating} sheet${progress.generating === 1 ? '' : 's'}…`
-                : progress.stale > 0
-                  ? `${progress.stale} need re-rendering after your edits`
-                  : progress.errors > 0
-                    ? `${progress.errors} failed — tap a card to retry`
-                    : 'Tap any sheet to render it'
-            }
-          />
+          <View style={[styles.heading, compact && styles.headingCompact]}>
+            <View style={styles.headingCopy}>
+              <Text style={styles.title}>Meet the cast</Text>
+              <Text style={styles.subtitle}>
+                The whole set, at a useful size. Select a card to inspect its visual rules.
+              </Text>
+            </View>
+            <Text style={styles.readout}>
+              {progress.done}/{progress.total} sheets ready
+            </Text>
+          </View>
 
-          {error ? <Callout variant="error" title="Generation stopped" message={error} /> : null}
-
-          {project.people.length > 0 ? (
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Eyebrow>People</Eyebrow>
-                <Mono color={theme.textQuaternary}>{project.people.length}</Mono>
-              </View>
-              <View style={[styles.grid, { gap: GAP }]}>
-                {project.people.map((person, i) => (
-                  <PersonCard
-                    key={person.id}
-                    person={person}
-                    index={i}
-                    width={cardWidth}
-                    showCost={settings.showCosts}
-                    onGenerate={() => generatePersonImage(person.id)}
-                    onEdit={() => setEditing({ kind: 'person', item: person })}
-                  />
-                ))}
-              </View>
+          {error ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="warning-outline" size={15} color={theme.danger} />
+              <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
 
-          {project.things.length > 0 ? (
-            <View style={styles.section}>
-              <View style={styles.sectionHead}>
-                <Eyebrow>Things</Eyebrow>
-                <Mono color={theme.textQuaternary}>{project.things.length}</Mono>
-              </View>
-              <View style={[styles.grid, { gap: GAP }]}>
-                {project.things.map((thing, i) => (
-                  <ThingCard
-                    key={thing.id}
-                    thing={thing}
-                    index={i}
-                    width={cardWidth}
-                    showCost={settings.showCosts}
-                    onGenerate={() => generateThingImage(thing.id)}
-                    onEdit={() => setEditing({ kind: 'thing', item: thing })}
+          <View style={[styles.castGrid, compact && styles.castGridCompact]}>
+            {items.map((selection) => {
+              const key = keyFor(selection);
+              return (
+                <CastCard
+                  key={key}
+                  selection={selection}
+                  selected={key === keyFor(selected)}
+                  kept={kept.has(key)}
+                  compact={compact}
+                  onSelect={() => {
+                    tap('light');
+                    setSelectedKey(key);
+                  }}
+                  onKeep={() => toggleKeep(selection)}
+                  onRender={() => void generate(selection)}
+                />
+              );
+            })}
+          </View>
+
+          <View style={[styles.detailPanel, compact && styles.detailPanelCompact]}>
+            <View style={[styles.selectionPanel, compact && styles.selectionPanelCompact]}>
+              <Text style={styles.eyebrow}>SELECTED · {selected.item.name.toUpperCase()}</Text>
+              <View style={styles.previewRow}>
+                {selected.item.imageUri ? (
+                  <Image
+                    source={{ uri: selected.item.imageUri }}
+                    resizeMode="contain"
+                    style={styles.detailImage}
+                    accessibilityLabel={`${selected.item.name} reference sheet`}
                   />
+                ) : (
+                  <PatternPreview status={selected.item.imageStatus} />
+                )}
+              </View>
+              <Text style={styles.sourceNote}>
+                {selected.kind === 'person' ? 'front · three-quarter · detail' : 'primary · reverse'}
+              </Text>
+            </View>
+
+            <View style={[styles.attributesPanel, compact && styles.attributesPanelCompact]}>
+              <Text style={styles.eyebrow}>ATTRIBUTES</Text>
+              <Text style={styles.detailTitle}>{selected.item.name}</Text>
+              {'role' in selected.item ? (
+                <Text style={styles.role}>{selected.item.role}</Text>
+              ) : null}
+              <View style={styles.attributeChips}>
+                {attributesFor(selected.item.look).map((attribute) => (
+                  <View key={attribute} style={styles.attributeChip}>
+                    <Text style={styles.attributeText}>{attribute}</Text>
+                  </View>
                 ))}
               </View>
+              <Text style={styles.lookText}>{selected.item.look}</Text>
+              <View style={styles.panelActions}>
+                <Button
+                  label={kept.has(keyFor(selected)) ? 'Kept' : `Keep ${selected.item.name}`}
+                  size="sm"
+                  inline
+                  onPress={() => toggleKeep(selected)}
+                />
+                <Button
+                  label="Tune details"
+                  size="sm"
+                  variant="secondary"
+                  inline
+                  onPress={() => setEditing(selected)}
+                />
+              </View>
             </View>
-          ) : null}
+
+            <View style={[styles.biblePanel, compact && styles.biblePanelCompact]}>
+              <Text style={styles.eyebrow}>VISUAL BIBLE</Text>
+              <View style={styles.bibleMeta}>
+                <BibleTag label={project.style} />
+                <BibleTag label={`${project.durationSec}s`} />
+                <BibleTag label="9:16 vertical" />
+              </View>
+              <Text style={styles.bibleText}>
+                {project.styleNotes ||
+                  `${project.style} treatment with a consistent palette, lighting direction, lens language, and material finish across every sheet.`}
+              </Text>
+              <View style={styles.bibleRule} />
+              <Text style={styles.bibleCaption}>
+                Shared by cast, places, action, and every final scene.
+              </Text>
+            </View>
+          </View>
         </Container>
       </ScrollView>
+
       <ItemEditor
         target={editing}
         onClose={() => setEditing(null)}
@@ -261,438 +284,389 @@ export default function CastScreen() {
   );
 }
 
-function MetaPill({
-  icon,
-  label,
+function CastCard({
+  selection,
+  selected,
+  kept,
+  compact,
+  onSelect,
+  onKeep,
+  onRender,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
+  selection: CastSelection;
+  selected: boolean;
+  kept: boolean;
+  compact: boolean;
+  onSelect: () => void;
+  onKeep: () => void;
+  onRender: () => void;
 }) {
+  const { item } = selection;
+
   return (
-    <View style={styles.metaPill}>
-      <Ionicons name={icon} size={12} color={theme.textTertiary} />
-      <Text style={styles.metaText}>{label}</Text>
+    <View
+      style={[
+        styles.castCard,
+        compact && styles.castCardCompact,
+        selected && styles.castCardSelected,
+      ]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityLabel={`Select ${item.name}`}
+        onPress={onSelect}
+        style={({ pressed }) => pressed && styles.pressed}>
+        <View style={styles.cardImage}>
+          {item.imageUri ? (
+            <Image source={{ uri: item.imageUri }} resizeMode="contain" style={StyleSheet.absoluteFill} />
+          ) : (
+            <PatternPreview status={item.imageStatus} />
+          )}
+          {kept ? (
+            <View style={styles.keptBadge}>
+              <Ionicons name="checkmark" size={11} color={theme.surface} />
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.cardBody}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.cardKind} numberOfLines={1}>
+              {'role' in item ? item.role : 'object'}
+            </Text>
+          </View>
+          <Text style={styles.cardLook} numberOfLines={2}>{item.look}</Text>
+          {item.imageError ? <Text style={styles.cardError} numberOfLines={1}>{item.imageError}</Text> : null}
+        </View>
+      </Pressable>
+      <View style={styles.cardActions}>
+        <MiniAction label={kept ? 'Kept' : 'Keep'} primary={!kept} onPress={onKeep} />
+        <MiniAction
+          label={item.imageStatus === 'generating' ? 'Drawing…' : item.imageUri ? 'Redo' : 'Render'}
+          disabled={item.imageStatus === 'generating'}
+          onPress={onRender}
+        />
+      </View>
     </View>
   );
 }
 
-function SheetCardChrome({
-  index,
-  title,
-  subtitle,
-  status,
-  stale,
-  uri,
-  width,
-  emptyLabel,
-  accessibilityLabel,
-  canGenerate,
-  onGenerate,
-  viewLabels,
-  look,
-  error,
-  showCost,
-  cost,
-  onEdit,
-}: {
-  index: number;
-  title: string;
-  subtitle?: string;
-  status: Person['imageStatus'];
-  stale?: boolean;
-  uri?: string;
-  width: number;
-  emptyLabel: string;
-  accessibilityLabel: string;
-  canGenerate: boolean;
-  onGenerate: () => void;
-  viewLabels: readonly string[];
-  look: string;
-  error?: string;
-  showCost: boolean;
-  cost?: number;
-  onEdit: () => void;
-}) {
-  const { accent } = useSettings();
-  const sheetWidth = Math.min(width - 40, 420);
-
+function PatternPreview({ status }: { status: Person['imageStatus'] }) {
   return (
-    <GlassCard
-      tone="raised"
-      radius={theme.radius.lg}
-      style={{ width }}
-      glowColor={status === 'generating' ? accent.glow : undefined}>
-      <View style={styles.cardHeader}>
-        <View style={styles.sceneNum}>
-          <LinearGradient
-            colors={theme.metal.chrome}
-            start={{ x: 0.1, y: 0 }}
-            end={{ x: 0.9, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <Text style={styles.sceneNumText}>{index + 1}</Text>
-        </View>
-
-        <View style={styles.cardTitleBlock}>
-          <CaptionStrong numberOfLines={1}>{title}</CaptionStrong>
-          {subtitle ? <Mono numberOfLines={1}>{subtitle}</Mono> : null}
-        </View>
-
-        <StatusBadge status={status} stale={stale} />
-      </View>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        onPress={
-          status === 'generating' ? undefined : canGenerate ? onGenerate : onEdit
-        }
-        style={styles.imageWrap}>
-        <SheetFrame
-          uri={uri}
-          width={sheetWidth}
-          status={status}
-          emptyLabel={emptyLabel}
-        />
-
-        <View style={[styles.viewRow, { width: sheetWidth }]}>
-          {viewLabels.map((label) => (
-            <Text key={label} style={styles.viewLabel} numberOfLines={1}>
-              {label}
-            </Text>
-          ))}
-        </View>
-
-        {stale && uri ? (
-          <View style={styles.staleOverlay} pointerEvents="none">
-            <View style={styles.stalePill}>
-              <Ionicons name="alert-circle" size={11} color={theme.warning} />
-              <Text style={styles.stalePillText}>Outdated</Text>
-            </View>
-          </View>
-        ) : null}
-      </Pressable>
-
-      {error ? (
-        <View style={styles.errorRow}>
-          <Ionicons name="warning-outline" size={12} color={theme.danger} />
-          <Text style={styles.errorText} numberOfLines={2}>
-            {error}
-          </Text>
-        </View>
-      ) : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Edit ${title}`}
-        onPress={onEdit}
-        style={styles.descBlock}>
-        <Body style={styles.descText} numberOfLines={4}>
-          {look}
-        </Body>
-      </Pressable>
-
-      <View style={styles.cardFooter}>
-        {showCost ? (
-          <Mono>{cost != null ? `$${cost.toFixed(2)}` : '~$0.04'}</Mono>
+    <View style={styles.pattern}>
+      {Array.from({ length: 12 }).map((_, index) => (
+        <View key={index} style={[styles.patternStripe, { left: index * 33 - 80 }]} />
+      ))}
+      <View style={styles.patternLabel}>
+        {status === 'generating' ? (
+          <ActivityIndicator size="small" color={theme.info} />
         ) : (
-          <View />
+          <Ionicons name="image-outline" size={18} color={theme.textTertiary} />
         )}
-
-        <View style={styles.cardActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Edit ${title}`}
-            onPress={onEdit}
-            style={styles.regenLink}>
-            <Ionicons name="create-outline" size={13} color={theme.text} />
-            <Text style={styles.regenText}>Edit</Text>
-          </Pressable>
-          {status !== 'generating' ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={uri ? `Re-render ${title}` : `Render ${title}`}
-              onPress={onGenerate}
-              style={styles.regenLink}>
-              <Ionicons name={uri ? 'refresh' : 'sparkles'} size={13} color={theme.text} />
-              <Text style={styles.regenText}>{uri ? 'Re-render' : 'Render'}</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <Text style={styles.patternText}>
+          {status === 'generating' ? 'drawing now…' : 'ready to render'}
+        </Text>
       </View>
-    </GlassCard>
+    </View>
   );
 }
 
-function PersonCard({
-  person,
-  index,
-  width,
-  showCost,
-  onGenerate,
-  onEdit,
+function MiniAction({
+  label,
+  primary,
+  disabled,
+  onPress,
 }: {
-  person: Person;
-  index: number;
-  width: number;
-  showCost: boolean;
-  onGenerate: () => void;
-  onEdit: () => void;
+  label: string;
+  primary?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
 }) {
-  const canGenerate = needsImage(person) && person.imageStatus !== 'generating';
-
   return (
-    <SheetCardChrome
-      index={index}
-      title={person.name}
-      subtitle={person.role}
-      status={person.imageStatus}
-      stale={person.imageStale}
-      uri={person.imageUri}
-      width={width}
-      emptyLabel="Tap to render"
-      accessibilityLabel={
-        canGenerate ? `Render sheet for ${person.name}` : `Edit ${person.name}`
-      }
-      canGenerate={canGenerate}
-      onGenerate={onGenerate}
-      onEdit={onEdit}
-      viewLabels={PERSON_VIEWS}
-      look={person.look}
-      error={person.imageError}
-      showCost={showCost}
-      cost={person.imageCost}
-    />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={(event) => {
+        event.stopPropagation();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.miniAction,
+        primary && styles.miniActionPrimary,
+        disabled && styles.miniActionDisabled,
+        pressed && styles.pressed,
+      ]}>
+      <Text style={[styles.miniActionText, primary && styles.miniActionTextPrimary]}>{label}</Text>
+    </Pressable>
   );
 }
 
-function ThingCard({
-  thing,
-  index,
-  width,
-  showCost,
-  onGenerate,
-  onEdit,
-}: {
-  thing: Thing;
-  index: number;
-  width: number;
-  showCost: boolean;
-  onGenerate: () => void;
-  onEdit: () => void;
-}) {
-  const canGenerate = needsImage(thing) && thing.imageStatus !== 'generating';
-
+function BibleTag({ label }: { label: string }) {
   return (
-    <SheetCardChrome
-      index={index}
-      title={thing.name}
-      status={thing.imageStatus}
-      stale={thing.imageStale}
-      uri={thing.imageUri}
-      width={width}
-      emptyLabel="Tap to render"
-      accessibilityLabel={
-        canGenerate ? `Render sheet for ${thing.name}` : `Edit ${thing.name}`
-      }
-      canGenerate={canGenerate}
-      onGenerate={onGenerate}
-      onEdit={onEdit}
-      viewLabels={[thing.views[0].label, thing.views[1].label]}
-      look={thing.look}
-      error={thing.imageError}
-      showCost={showCost}
-      cost={thing.imageCost}
-    />
+    <View style={styles.bibleTag}>
+      <Text style={styles.bibleTagText}>{label}</Text>
+    </View>
   );
+}
+
+function attributesFor(look: string) {
+  const attributes = [...new Set(look
+    .split(/[,;.]|\band\b/i)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3 && part.length <= 30)
+    .slice(0, 5))];
+  return attributes.length > 0 ? attributes : ['consistent silhouette', 'locked palette'];
 }
 
 const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: {
-    paddingHorizontal: H_PAD,
+    paddingHorizontal: theme.space.xl,
     paddingTop: theme.space.sm,
-    paddingBottom: theme.space.xxl,
+    paddingBottom: theme.space.xxxl,
   },
-  stack: {
-    gap: theme.space.lg,
-  },
-  railInner: {
+  container: { maxWidth: 1020, gap: theme.space.xl },
+  containerDesktop: { maxWidth: 1120, paddingLeft: 224 },
+  railCard: {
+    paddingHorizontal: theme.space.md,
     paddingVertical: theme.space.md,
-    paddingHorizontal: theme.space.sm,
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
   },
-  heading: {
-    gap: theme.space.md,
-  },
-  headingTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.space.md,
-  },
-  headingTitle: {
-    flex: 1,
-    minWidth: 0,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.space.sm,
-  },
-  metaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    height: 26,
-    borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.glass.border,
-  },
-  metaText: {
-    fontFamily: theme.font.sans,
-    fontSize: 11.5,
-    fontWeight: '500',
-    color: theme.textSecondary,
-  },
-  section: {
-    gap: theme.space.md,
-  },
-  sectionHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.space.xs,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.space.md,
-    paddingHorizontal: theme.space.lg,
-    paddingTop: theme.space.lg,
-    paddingBottom: theme.space.md,
-  },
-  sceneNum: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sceneNumText: {
-    fontFamily: theme.font.mono,
-    fontSize: 12,
-    fontWeight: '700',
-    color: theme.textOnMetal,
-  },
-  cardTitleBlock: {
-    flex: 1,
-    minWidth: 0,
-    gap: 1,
-  },
-  imageWrap: {
-    alignItems: 'center',
-    paddingHorizontal: theme.space.lg,
-    paddingBottom: theme.space.md,
-    gap: theme.space.sm,
-    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
-  },
-  viewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewLabel: {
-    flex: 1,
-    textAlign: 'center',
-    fontFamily: theme.font.sans,
-    fontSize: 10.5,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: theme.textQuaternary,
-  },
-  staleOverlay: {
+  railCardDesktop: {
     position: 'absolute',
-    top: 8,
-    right: theme.space.lg + 8,
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 200,
+    paddingHorizontal: theme.space.sm,
+    paddingVertical: theme.space.lg,
+    borderRadius: 0,
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
   },
-  stalePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    height: 22,
-    borderRadius: theme.radius.pill,
-    backgroundColor: 'rgba(20,16,4,0.82)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(251,191,36,0.45)',
-  },
-  stalePillText: {
+  heading: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.xl },
+  headingCompact: { flexDirection: 'column', alignItems: 'flex-start' },
+  headingCopy: { flex: 1, gap: 5 },
+  title: {
+    color: theme.text,
     fontFamily: theme.font.sans,
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme.warning,
+    fontSize: 29,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    lineHeight: 34,
   },
-  errorRow: {
+  subtitle: {
+    maxWidth: 680,
+    color: theme.textSecondary,
+    fontFamily: theme.font.sans,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  readout: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 11 },
+  errorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 5,
-    paddingHorizontal: theme.space.lg,
-    paddingBottom: theme.space.md,
+    gap: theme.space.sm,
+    padding: theme.space.md,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.danger,
+    borderRadius: theme.radius.sm,
   },
-  errorText: {
-    flex: 1,
-    fontFamily: theme.font.sans,
-    fontSize: 11,
-    fontWeight: '500',
-    color: theme.danger,
-  },
-  descBlock: {
-    paddingHorizontal: theme.space.lg,
-    paddingTop: theme.space.md,
-    paddingBottom: theme.space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.glass.border,
-  },
-  descText: {
-    fontSize: 13.5,
-    lineHeight: 19.5,
-    color: theme.textSecondary,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 44,
-    paddingHorizontal: theme.space.lg,
-    paddingVertical: theme.space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.glass.border,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.space.lg,
-  },
-  regenLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  errorText: { flex: 1, color: theme.danger, fontFamily: theme.font.sans, fontSize: 13 },
+  castGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: theme.space.md },
+  castGridCompact: { flexDirection: 'column', flexWrap: 'nowrap' },
+  castCard: {
+    width: 230,
+    minWidth: 205,
+    overflow: 'hidden',
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  regenText: {
+  castCardCompact: { width: '100%', minWidth: 0 },
+  castCardSelected: {
+    borderColor: theme.accent,
+    borderWidth: 1.5,
+    ...Platform.select({
+      web: { boxShadow: `0 0 0 3px ${theme.accentSoft}` },
+      default: { shadowColor: theme.accent, shadowOpacity: 0.14, shadowRadius: 8 },
+    }),
+  },
+  cardImage: {
+    height: 124,
+    overflow: 'hidden',
+    backgroundColor: theme.surfaceMuted,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  keptBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.info,
+  },
+  cardBody: { padding: theme.space.md, gap: theme.space.sm },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: theme.space.sm },
+  cardTitle: {
+    flex: 1,
+    color: theme.text,
+    fontFamily: theme.font.sans,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cardKind: {
+    maxWidth: '45%',
+    color: theme.textTertiary,
+    fontFamily: theme.font.mono,
+    fontSize: 10,
+  },
+  cardLook: {
+    minHeight: 34,
+    color: theme.textSecondary,
     fontFamily: theme.font.sans,
     fontSize: 12.5,
-    fontWeight: '700',
-    color: theme.text,
+    lineHeight: 17,
   },
+  cardError: { color: theme.danger, fontFamily: theme.font.sans, fontSize: 11 },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: theme.space.md,
+    paddingBottom: theme.space.md,
+  },
+  miniAction: {
+    flex: 1,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 7,
+    backgroundColor: theme.bgElevated,
+  },
+  miniActionPrimary: { backgroundColor: theme.accent, borderColor: theme.accent },
+  miniActionDisabled: { opacity: 0.45 },
+  miniActionText: {
+    color: theme.textSecondary,
+    fontFamily: theme.font.sans,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  miniActionTextPrimary: { color: theme.surface },
+  detailPanel: {
+    minHeight: 238,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+  },
+  detailPanelCompact: { flexDirection: 'column' },
+  selectionPanel: {
+    width: 290,
+    padding: theme.space.lg,
+    gap: theme.space.md,
+    borderRightColor: theme.border,
+    borderRightWidth: 1,
+  },
+  selectionPanelCompact: {
+    width: '100%',
+    borderRightWidth: 0,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  eyebrow: {
+    color: theme.textTertiary,
+    fontFamily: theme.font.mono,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  previewRow: { flex: 1, minHeight: 138, overflow: 'hidden', borderRadius: theme.radius.sm },
+  detailImage: { width: '100%', height: '100%', backgroundColor: theme.surfaceMuted },
+  sourceNote: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 10.5 },
+  attributesPanel: {
+    flex: 1,
+    minWidth: 250,
+    padding: theme.space.lg,
+    gap: theme.space.md,
+    borderRightColor: theme.border,
+    borderRightWidth: 1,
+  },
+  attributesPanelCompact: {
+    minWidth: 0,
+    borderRightWidth: 0,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  detailTitle: {
+    color: theme.text,
+    fontFamily: theme.font.sans,
+    fontSize: 21,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  role: { marginTop: -8, color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 11 },
+  attributeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  attributeChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: theme.borderStrong,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.bgElevated,
+  },
+  attributeText: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 12.5 },
+  lookText: {
+    color: theme.textSecondary,
+    fontFamily: theme.font.sans,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  panelActions: { marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.sm },
+  biblePanel: { width: 260, padding: theme.space.lg, gap: theme.space.md, backgroundColor: theme.surfaceMuted },
+  biblePanelCompact: { width: '100%' },
+  bibleMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  bibleTag: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  bibleTagText: { color: theme.textSecondary, fontFamily: theme.font.mono, fontSize: 10.5 },
+  bibleText: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 13, lineHeight: 19 },
+  bibleRule: { height: 1, backgroundColor: theme.border },
+  bibleCaption: { color: theme.textTertiary, fontFamily: theme.font.sans, fontSize: 11.5, lineHeight: 17 },
+  pattern: { flex: 1, overflow: 'hidden', backgroundColor: theme.surfaceMuted },
+  patternStripe: {
+    position: 'absolute',
+    top: -70,
+    width: 14,
+    height: 280,
+    backgroundColor: theme.accentSoft,
+    transform: [{ rotate: '45deg' }],
+  },
+  patternLabel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  patternText: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 10 },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: theme.space.lg },
+  footerCompact: { flexDirection: 'column', alignItems: 'stretch' },
+  footerNote: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 13 },
+  pressed: { opacity: 0.65 },
 });

@@ -13,9 +13,15 @@ export default function Root({ children }: { children: ReactNode }) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
-        <meta name="theme-color" content="#06070B" />
-        <meta name="color-scheme" content="dark" />
-        <title>Studio Lab — AI video studio</title>
+        <meta name="theme-color" content="#FBF8EF" />
+        <meta name="color-scheme" content="light" />
+        <title>Reel — start to video</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
 
         {/* Keeps ScrollView behaviour on web close to native. */}
         <ScrollViewStyleReset />
@@ -28,10 +34,10 @@ export default function Root({ children }: { children: ReactNode }) {
 }
 
 const rootStyles = `
-:root { color-scheme: dark; }
+:root { color-scheme: light; }
 
 html, body {
-  background-color: #06070B;
+  background-color: #FBF8EF;
   margin: 0;
 }
 
@@ -42,24 +48,20 @@ body {
   overscroll-behavior: none;
 }
 
-/* Slim, dark scrollbars so they don't break the glass aesthetic. */
+/* Quiet scrollbars that sit naturally on the paper canvas. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.18) transparent;
+  scrollbar-color: #CDC1B2 transparent;
 }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(255,255,255,0.16);
+  background-color: #CDC1B2;
   border-radius: 999px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
-*::-webkit-scrollbar-thumb:hover { background-color: rgba(255,255,255,0.28); }
+*::-webkit-scrollbar-thumb:hover { background-color: #A99C8C; }
 
-::selection { background: rgba(175,196,228,0.28); }
-
-@media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-}
+::selection { background: rgba(217,91,56,0.22); }
 `;

@@ -1,4 +1,3 @@
-import { BlurView } from 'expo-blur';
 import { useState } from 'react';
 import {
   Platform,
@@ -11,7 +10,6 @@ import {
 } from 'react-native';
 
 import { theme } from '@/constants/theme';
-import { useSettings } from '@/context/SettingsContext';
 import { Eyebrow, Micro } from './Typography';
 
 type Props = TextInputProps & {
@@ -19,50 +17,30 @@ type Props = TextInputProps & {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Recessed glass input well. Focus lights the rim with the accent colour. */
 export function TextField({ minHeight = 48, style, multiline, ...rest }: Props) {
-  const { blur, accent } = useSettings();
   const [focused, setFocused] = useState(false);
 
   return (
-    <View style={[styles.well, { minHeight, borderRadius: theme.radius.md }, style]}>
-      <BlurView
-        intensity={Math.round(blur * 0.7)}
-        tint="dark"
-        experimentalBlurMethod="dimezisBlurView"
-        style={[StyleSheet.absoluteFill, { borderRadius: theme.radius.md }]}
-      />
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: theme.glass.fillSunken, borderRadius: theme.radius.md },
-        ]}
-      />
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          styles.rim,
-          {
-            borderRadius: theme.radius.md,
-            borderColor: focused ? accent.tint : theme.glass.border,
-          },
-        ]}
-        pointerEvents="none"
-      />
-
+    <View
+      style={[
+        styles.well,
+        { minHeight },
+        focused && styles.focused,
+        style,
+      ]}>
       <TextInput
         {...rest}
         multiline={multiline}
-        onFocus={(e) => {
+        onFocus={(event) => {
           setFocused(true);
-          rest.onFocus?.(e);
+          rest.onFocus?.(event);
         }}
-        onBlur={(e) => {
+        onBlur={(event) => {
           setFocused(false);
-          rest.onBlur?.(e);
+          rest.onBlur?.(event);
         }}
         placeholderTextColor={theme.textQuaternary}
-        selectionColor={accent.tint}
+        selectionColor={theme.accent}
         textAlignVertical={multiline ? 'top' : 'center'}
         style={[
           styles.input,
@@ -74,7 +52,6 @@ export function TextField({ minHeight = 48, style, multiline, ...rest }: Props) 
   );
 }
 
-/** Label + optional hint/counter above a field. */
 export function Field({
   label,
   hint,
@@ -101,9 +78,16 @@ const styles = StyleSheet.create({
   well: {
     overflow: 'hidden',
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderBottomWidth: 2,
+    borderColor: theme.border,
+    borderBottomColor: theme.borderStrong,
   },
-  rim: {
-    borderWidth: StyleSheet.hairlineWidth,
+  focused: {
+    borderColor: theme.accent,
+    borderBottomColor: theme.accent,
   },
   input: {
     fontFamily: theme.font.sans,
@@ -112,14 +96,8 @@ const styles = StyleSheet.create({
     color: theme.text,
     paddingHorizontal: theme.space.lg,
     paddingVertical: theme.space.md,
-    // On web the input renders as a static <textarea>/<input>, which CSS paints
-    // *below* the absolutely positioned blur overlays. Lift it above them.
-    position: 'relative',
-    zIndex: 1,
   },
-  field: {
-    gap: theme.space.md,
-  },
+  field: { gap: theme.space.md },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',

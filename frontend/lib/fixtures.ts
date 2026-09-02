@@ -25,14 +25,15 @@ const IMAGE_COST = 0.04;
 
 const PLACEHOLDER_BY_ID: Record<string, string> = {
   maya: '1',
-  'latte-cup': '2',
-  'espresso-machine': '3',
-  'night-shop': '4',
-  'empty-shop': '1',
-  'maya-at-counter': '2',
-  'swan-lifts': '3',
-  'on-the-saucer': '4',
-  'shared-secret': '5',
+  dog: '2',
+  'delivery-bag': '3',
+  rooftop: '4',
+  alley: '5',
+  'phone-buzzes': '1',
+  'looks-over': '2',
+  jump: '3',
+  landing: '4',
+  delivered: '5',
 };
 
 function placeholderUri(id: string): string {
@@ -43,39 +44,43 @@ const MOCK_PEOPLE: Pick<Person, 'id' | 'name' | 'role' | 'look'>[] = [
   {
     id: 'maya',
     name: 'Maya',
-    role: 'raccoon barista',
-    look: 'Small upright raccoon, green apron, bent left ear, dark eyes.',
+    role: 'bike courier',
+    look: 'Late 20s, cropped dark hair, rust windbreaker, black cargo trousers.',
+  },
+  {
+    id: 'dog',
+    name: 'Alley dog',
+    role: 'deadpan witness',
+    look: 'Small cream terrier with one dark ear and a permanently unimpressed stare.',
   },
 ];
 
 const MOCK_THINGS: Pick<Thing, 'id' | 'name' | 'look' | 'views'>[] = [
   {
-    id: 'latte-cup',
-    name: 'Latte cup',
-    look: 'White ceramic cup and saucer, swan foam art.',
+    id: 'delivery-bag',
+    name: 'Delivery bag',
+    look: 'Boxy tomato-red insulated backpack, reflective silver piping, slightly scuffed.',
     views: [
-      { label: 'Side', hint: 'cup and saucer in profile' },
-      { label: 'Top', hint: 'latte art from above' },
-    ],
-  },
-  {
-    id: 'espresso-machine',
-    name: 'Espresso machine',
-    look: 'Chrome espresso machine, midnight shop lighting.',
-    views: [
-      { label: 'Front', hint: 'Whole machine' },
-      { label: 'Group head', hint: 'Close detail' },
+      { label: 'Front', hint: 'straps and reflective piping' },
+      { label: 'Side', hint: 'square profile and zipper pull' },
     ],
   },
 ];
 
 const MOCK_SCENES: Pick<Scene, 'id' | 'title' | 'look' | 'peopleIds' | 'thingIds'>[] = [
   {
-    id: 'night-shop',
-    title: 'Night coffee shop',
-    look: 'Warm wood bar, neon OPEN, moonlight on the counter, empty of action.',
+    id: 'rooftop',
+    title: 'Rain-dark rooftop',
+    look: 'Low brick parapet, wet tar roof, blue dusk skyline, red aircraft lights.',
     peopleIds: ['maya'],
-    thingIds: ['latte-cup', 'espresso-machine'],
+    thingIds: ['delivery-bag'],
+  },
+  {
+    id: 'alley',
+    title: 'Delivery alley',
+    look: 'Narrow service alley below, amber doorway, wet pavement and stacked crates.',
+    peopleIds: ['maya', 'dog'],
+    thingIds: ['delivery-bag'],
   },
 ];
 
@@ -84,49 +89,49 @@ const MOCK_FRAMES: Pick<
   'id' | 'order' | 'sceneId' | 'peopleIds' | 'thingIds' | 'action' | 'camera'
 >[] = [
   {
-    id: 'empty-shop',
+    id: 'phone-buzzes',
     order: 1,
-    sceneId: 'night-shop',
-    peopleIds: [],
-    thingIds: ['latte-cup', 'espresso-machine'],
-    action: 'Empty shop, one cup on the bar, machine idle.',
-    camera: 'Wide, moonlight through the window.',
+    sceneId: 'rooftop',
+    peopleIds: ['maya'],
+    thingIds: ['delivery-bag'],
+    action: 'Maya checks the delivery timer: forty-five seconds left.',
+    camera: 'Wide rooftop opener, phone glow against blue dusk.',
   },
   {
-    id: 'maya-at-counter',
+    id: 'looks-over',
     order: 2,
-    sceneId: 'night-shop',
+    sceneId: 'rooftop',
     peopleIds: ['maya'],
-    thingIds: ['latte-cup', 'espresso-machine'],
-    action: 'Maya steams a cup at the counter. Bent ear, green apron.',
-    camera: 'Medium shot behind the bar.',
+    thingIds: ['delivery-bag'],
+    action: 'She looks over the parapet and spots the amber delivery door below.',
+    camera: 'Over-shoulder tilt down into the alley.',
   },
   {
-    id: 'swan-lifts',
+    id: 'jump',
     order: 3,
-    sceneId: 'night-shop',
+    sceneId: 'rooftop',
     peopleIds: ['maya'],
-    thingIds: ['latte-cup'],
-    action: 'Maya leans in as the foam swan peels off the milk.',
-    camera: 'Over-shoulder close on the cup.',
+    thingIds: ['delivery-bag'],
+    action: 'Maya commits, vaulting the parapet with the red bag tight to her back.',
+    camera: 'Dynamic vertical wide, city lights streaking behind her.',
   },
   {
-    id: 'on-the-saucer',
+    id: 'landing',
     order: 4,
-    sceneId: 'night-shop',
-    peopleIds: ['maya'],
-    thingIds: ['latte-cup'],
-    action: 'Swan standing on the saucer. Maya watching, still.',
-    camera: 'Close on the saucer, Maya in soft focus.',
+    sceneId: 'alley',
+    peopleIds: ['maya', 'dog'],
+    thingIds: ['delivery-bag'],
+    action: 'She lands in a crouch beside the dog, who does not bother to move.',
+    camera: 'Low impact shot, small splash across wet pavement.',
   },
   {
-    id: 'shared-secret',
+    id: 'delivered',
     order: 5,
-    sceneId: 'night-shop',
-    peopleIds: ['maya'],
-    thingIds: ['latte-cup'],
-    action: 'Maya smiles, the swan perched on the rim.',
-    camera: 'Close-up of Maya holding the cup.',
+    sceneId: 'alley',
+    peopleIds: ['maya', 'dog'],
+    thingIds: ['delivery-bag'],
+    action: 'Maya rings the bell with one second left; the dog finally looks impressed.',
+    camera: 'Medium two-shot at the amber doorway.',
   },
 ];
 
@@ -137,8 +142,8 @@ export async function mockCast(_input: {
 }): Promise<CastResponse> {
   await delay(FIXTURE_DELAY.cast);
   return {
-    title: 'Latte Revolution',
-    styleNotes: '2D animated night interior, warm wood, soft neon, painterly light.',
+    title: 'Balcony jump',
+    styleNotes: 'Grainy 35mm texture, blue-hour city, wet surfaces, tomato-red accents, handheld energy.',
     people: MOCK_PEOPLE,
     things: MOCK_THINGS,
     cost: LLM_COST,
@@ -192,11 +197,11 @@ export function createDemoProject(): Project {
 
   return {
     id: 'demo',
-    title: 'Latte Revolution',
-    idea: 'Maya, a tiny raccoon barista, finds her latte art comes alive at midnight.',
-    style: 'Cinematic',
-    styleNotes: '2D animated night interior, warm wood, soft neon, painterly light.',
-    durationSec: 30,
+    title: 'Balcony jump',
+    idea: 'A courier is late for a delivery and takes a shortcut off a balcony.',
+    style: 'Grainy film',
+    styleNotes: 'Grainy 35mm texture, blue-hour city, wet surfaces, tomato-red accents, handheld energy.',
+    durationSec: 15,
     people,
     things,
     scenes,

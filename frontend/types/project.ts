@@ -78,10 +78,24 @@ export type Project = {
   totalCost: number;
 };
 
-export const STYLES = ['Cinematic', 'Documentary', 'Anime', 'Minimal', 'Retro'] as const;
+export const STYLES = [
+  'Grainy film',
+  'Flat vector',
+  'Anime cel',
+  'Claymation',
+  'Photoreal',
+] as const;
 export const DURATIONS = [15, 30, 60] as const;
 
-export const STEPS = ['Idea', 'Cast', 'Scenes', 'Frames', 'Video'] as const;
+export const STEPS = [
+  'Idea',
+  'Interview',
+  'Cast',
+  'Places',
+  'Action',
+  'Scenes',
+  'Watch',
+] as const;
 export type Step = (typeof STEPS)[number];
 
 export type CastResponse = {

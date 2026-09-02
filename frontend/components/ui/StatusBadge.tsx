@@ -19,7 +19,7 @@ const LOOK: Record<
   pending: {
     label: 'Queued',
     color: theme.neutral,
-    bg: 'rgba(255,255,255,0.06)',
+    bg: theme.surfaceMuted,
     icon: 'ellipse-outline',
   },
   generating: {

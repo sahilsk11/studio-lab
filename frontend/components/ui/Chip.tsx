@@ -1,6 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/constants/theme';
@@ -14,9 +12,8 @@ type Props = {
   disabled?: boolean;
 };
 
-/** Selection pill. Selected chips pick up the accent rim and a faint inner glow. */
 export function Chip({ label, selected, onPress, icon, disabled }: Props) {
-  const { blur, accent, tap } = useSettings();
+  const { tap } = useSettings();
 
   return (
     <Pressable
@@ -27,53 +24,21 @@ export function Chip({ label, selected, onPress, icon, disabled }: Props) {
         tap('light');
         onPress();
       }}
-      style={[styles.chip, disabled && styles.disabled]}>
-      <BlurView
-        intensity={blur}
-        tint="dark"
-        experimentalBlurMethod="dimezisBlurView"
-        style={[StyleSheet.absoluteFill, styles.round]}
-      />
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          styles.round,
-          { backgroundColor: selected ? theme.glass.fillActive : theme.glass.fill },
-        ]}
-      />
-      {selected ? (
-        <LinearGradient
-          colors={[`${accent.tint}38`, 'transparent']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={[StyleSheet.absoluteFill, styles.round]}
-        />
-      ) : null}
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          styles.round,
-          styles.rim,
-          { borderColor: selected ? accent.tint : theme.glass.border },
-        ]}
-      />
-
+      style={({ pressed }) => [
+        styles.chip,
+        selected && styles.selected,
+        disabled && styles.disabled,
+        pressed && styles.pressed,
+      ]}>
       <View style={styles.content}>
         {icon ? (
           <Ionicons
             name={icon}
-            size={14}
-            color={selected ? theme.text : theme.textTertiary}
+            size={13}
+            color={selected ? theme.accentDark : theme.textTertiary}
           />
         ) : null}
-        <Text
-          style={[
-            styles.label,
-            { color: selected ? theme.text : theme.textSecondary },
-            selected && styles.labelSelected,
-          ]}>
-          {label}
-        </Text>
+        <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
       </View>
     </Pressable>
   );
@@ -81,35 +46,32 @@ export function Chip({ label, selected, onPress, icon, disabled }: Props) {
 
 const styles = StyleSheet.create({
   chip: {
-    height: 38,
-    paddingHorizontal: 16,
+    minHeight: 34,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
     borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  round: {
-    borderRadius: theme.radius.pill,
+  selected: {
+    backgroundColor: theme.accentSoft,
+    borderColor: theme.accent,
   },
-  rim: {
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  disabled: {
-    opacity: 0.4,
-  },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
+  disabled: { opacity: 0.42 },
+  pressed: { opacity: 0.7 },
+  content: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   label: {
     fontFamily: theme.font.sans,
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '500',
-    letterSpacing: -0.1,
+    color: theme.textSecondary,
   },
   labelSelected: {
+    color: theme.accentDark,
     fontWeight: '600',
   },
 });

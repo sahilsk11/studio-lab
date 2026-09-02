@@ -1,10 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRef } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Platform,
   Pressable,
   StyleSheet,
@@ -30,21 +26,15 @@ type Props = {
   icon?: keyof typeof Ionicons.glyphMap;
   iconRight?: keyof typeof Ionicons.glyphMap;
   style?: StyleProp<ViewStyle>;
-  /** Shrinks to fit its label instead of filling the row. */
   inline?: boolean;
 };
 
 const SIZES = {
-  sm: { height: 38, px: 14, font: 13, icon: 15, radius: theme.radius.sm },
-  md: { height: 48, px: 18, font: 15, icon: 17, radius: theme.radius.md },
-  lg: { height: 56, px: 22, font: 16, icon: 19, radius: theme.radius.md },
+  sm: { height: 36, px: 14, font: 12.5, icon: 14, radius: theme.radius.sm },
+  md: { height: 46, px: 19, font: 14.5, icon: 16, radius: theme.radius.sm },
+  lg: { height: 54, px: 24, font: 16, icon: 18, radius: theme.radius.md },
 } as const;
 
-/**
- * Primary renders as polished chrome — a metal sweep with a convex highlight
- * layered over it. Everything else is frosted glass so the hierarchy between
- * "the action" and "an action" stays obvious.
- */
 export function Button({
   label,
   onPress,
@@ -57,26 +47,12 @@ export function Button({
   style,
   inline = false,
 }: Props) {
-  const { blur, animate, tap } = useSettings();
-  const press = useRef(new Animated.Value(0)).current;
-  const s = SIZES[size];
-  const isOff = disabled || loading;
-
-  function animateTo(value: number) {
-    if (!animate) return;
-    Animated.spring(press, {
-      toValue: value,
-      useNativeDriver: true,
-      speed: 40,
-      bounciness: 4,
-    }).start();
-  }
-
-  const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.972] });
-
-  const fg =
+  const { tap } = useSettings();
+  const metrics = SIZES[size];
+  const isDisabled = disabled || loading;
+  const foreground =
     variant === 'primary'
-      ? theme.textOnMetal
+      ? '#FFFFFF'
       : variant === 'danger'
         ? theme.danger
         : variant === 'ghost'
@@ -84,107 +60,52 @@ export function Button({
           : theme.text;
 
   return (
-    <Animated.View
-      style={[
-        inline ? styles.inline : styles.block,
-        { transform: [{ scale }] },
-        variant === 'primary' && !isOff ? theme.shadow.md : null,
-        isOff && styles.disabled,
-        style,
-      ]}>
+    <View style={[inline ? styles.inline : styles.block, isDisabled && styles.disabled, style]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ disabled: !!isOff, busy: !!loading }}
+        accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
+        disabled={isDisabled}
         onPress={() => {
           tap(variant === 'primary' ? 'medium' : 'light');
           onPress();
         }}
-        disabled={isOff}
-        onPressIn={() => animateTo(1)}
-        onPressOut={() => animateTo(0)}
-        style={[
-          styles.pressable,
-          { height: s.height, paddingHorizontal: s.px, borderRadius: s.radius },
+        style={({ pressed }) => [
+          styles.button,
+          styles[variant],
+          {
+            height: metrics.height,
+            paddingHorizontal: metrics.px,
+            borderRadius: metrics.radius,
+          },
+          pressed && styles.pressed,
         ]}>
-        {variant === 'primary' ? (
-          <>
-            <LinearGradient
-              colors={theme.metal.chrome}
-              start={{ x: 0.05, y: 0 }}
-              end={{ x: 0.95, y: 1 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: s.radius }]}
-            />
-            {/* Convex shading: bright crown, shaded base. */}
-            <LinearGradient
-              colors={theme.metal.convex}
-              locations={[0, 0.45, 0.72, 1]}
-              style={[StyleSheet.absoluteFill, { borderRadius: s.radius }]}
-            />
-          </>
-        ) : variant === 'ghost' ? null : (
-          <>
-            <BlurView
-              intensity={blur}
-              tint="dark"
-              experimentalBlurMethod="dimezisBlurView"
-              style={[StyleSheet.absoluteFill, { borderRadius: s.radius }]}
-            />
-            <LinearGradient
-              colors={theme.metal.gunmetal}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: s.radius }]}
-            />
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                styles.rim,
-                {
-                  borderRadius: s.radius,
-                  borderColor:
-                    variant === 'danger' ? 'rgba(251,113,133,0.35)' : theme.glass.borderStrong,
-                },
-              ]}
-            />
-            <LinearGradient
-              colors={theme.glass.edge}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[
-                styles.edge,
-                { borderTopLeftRadius: s.radius, borderTopRightRadius: s.radius },
-              ]}
-            />
-          </>
-        )}
-
         {loading ? (
-          <ActivityIndicator size="small" color={fg} />
+          <ActivityIndicator size="small" color={foreground} />
         ) : (
           <View style={styles.row}>
-            {icon ? <Ionicons name={icon} size={s.icon} color={fg} /> : null}
+            {icon ? <Ionicons name={icon} size={metrics.icon} color={foreground} /> : null}
             <Text
               numberOfLines={1}
               style={[
                 styles.label,
                 {
-                  color: fg,
-                  fontSize: s.font,
-                  fontFamily: theme.font.sans,
+                  color: foreground,
+                  fontSize: metrics.font,
                   fontWeight: variant === 'primary' ? '700' : '600',
                 },
               ]}>
               {label}
             </Text>
-            {iconRight ? <Ionicons name={iconRight} size={s.icon} color={fg} /> : null}
+            {iconRight ? (
+              <Ionicons name={iconRight} size={metrics.icon} color={foreground} />
+            ) : null}
           </View>
         )}
       </Pressable>
-    </Animated.View>
+    </View>
   );
 }
 
-/** Compact circular glass button for toolbars. */
 export function IconButton({
   icon,
   onPress,
@@ -200,87 +121,66 @@ export function IconButton({
   accessibilityLabel: string;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { blur, animate, tap } = useSettings();
-  const press = useRef(new Animated.Value(0)).current;
-  const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
-
-  function animateTo(value: number) {
-    if (!animate) return;
-    Animated.spring(press, { toValue: value, useNativeDriver: true, speed: 50 }).start();
-  }
+  const { tap } = useSettings();
 
   return (
-    <Animated.View style={[{ transform: [{ scale }] }, style]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        onPress={() => {
-          tap('light');
-          onPress();
-        }}
-        onPressIn={() => animateTo(1)}
-        onPressOut={() => animateTo(0)}
-        style={[
-          styles.iconButton,
-          { width: size, height: size, borderRadius: size / 2 },
-        ]}>
-        <BlurView
-          intensity={blur}
-          tint="dark"
-          experimentalBlurMethod="dimezisBlurView"
-          style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]}
-        />
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            styles.rim,
-            { borderRadius: size / 2, borderColor: theme.glass.borderStrong },
-          ]}
-        />
-        <Ionicons name={icon} size={size * 0.46} color={color} />
-      </Pressable>
-    </Animated.View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={() => {
+        tap('light');
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.iconButton,
+        { width: size, height: size, borderRadius: Math.min(theme.radius.sm, size / 2) },
+        pressed && styles.pressed,
+        style,
+      ]}>
+      <Ionicons name={icon} size={size * 0.46} color={color} />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  block: {
-    alignSelf: 'stretch',
-  },
-  inline: {
-    alignSelf: 'flex-start',
-  },
-  disabled: {
-    opacity: 0.38,
-  },
-  pressable: {
+  block: { alignSelf: 'stretch' },
+  inline: { alignSelf: 'flex-start' },
+  disabled: { opacity: 0.42 },
+  button: {
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    borderWidth: 1,
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  primary: {
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
+    ...theme.shadow.sm,
   },
-  label: {
-    textAlign: 'center',
+  secondary: {
+    backgroundColor: theme.surface,
+    borderColor: theme.borderStrong,
   },
-  rim: {
-    borderWidth: StyleSheet.hairlineWidth,
+  ghost: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
-  edge: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 1,
+  danger: {
+    backgroundColor: theme.dangerDim,
+    borderColor: '#E8BDB7',
   },
+  pressed: {
+    opacity: 0.78,
+    transform: [{ translateY: 1 }],
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  label: { fontFamily: theme.font.sans, textAlign: 'center' },
   iconButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
 });

@@ -3,25 +3,28 @@ import { STEPS, type Frame, type Person, type Project, type Scene, type Step, ty
 export type ImageTarget = Person | Thing | Scene | Frame;
 
 export function furthestStepIndex(project: Project): number {
-  if (project.videoReady) return 4;
-  if (project.frames.length > 0) return 3;
-  if (project.scenes.length > 0) return 2;
-  if (project.people.length > 0 || project.things.length > 0) return 1;
-  return 0;
+  if (project.frames.length > 0 || project.videoReady) return 6;
+  if (project.scenes.length > 0) return 4;
+  if (project.people.length > 0 || project.things.length > 0) return 2;
+  return 1;
 }
 
 export function stepRoute(step: Step): string {
   switch (step) {
     case 'Idea':
       return '/';
+    case 'Interview':
+      return '/interview';
     case 'Cast':
       return '/cast';
+    case 'Places':
+      return '/places';
+    case 'Action':
+      return '/action';
     case 'Scenes':
       return '/scenes';
-    case 'Frames':
-      return '/frames';
-    case 'Video':
-      return '/generate';
+    case 'Watch':
+      return '/watch';
   }
 }
 

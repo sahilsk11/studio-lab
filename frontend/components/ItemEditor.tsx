@@ -43,7 +43,7 @@ function heading(kind: ImageKind): string {
     case 'scene':
       return 'Edit place';
     case 'frame':
-      return 'Edit keyframe';
+      return 'Edit moment';
   }
 }
 
@@ -52,22 +52,22 @@ function deleteCopy(kind: ImageKind): { title: string; message: string } {
     case 'person':
       return {
         title: 'Remove this person?',
-        message: 'They come off the cast. Scenes and frames that cited them will drop the reference.',
+        message: 'They come off the cast. Places and moments that cite them will drop the reference.',
       };
     case 'thing':
       return {
         title: 'Remove this thing?',
         message:
-          'It comes off the cast. Use this for one-off props that belong in a keyframe, not a locked sheet.',
+          'It comes off the cast. Use this for one-off props that belong in a moment, not a locked sheet.',
       };
     case 'scene':
       return {
         title: 'Remove this place?',
-        message: 'This deletes the location and any keyframes that use it.',
+        message: 'This deletes the location and any moments that use it.',
       };
     case 'frame':
       return {
-        title: 'Remove this keyframe?',
+        title: 'Remove this moment?',
         message: 'This still comes out of the timeline.',
       };
   }
@@ -253,7 +253,7 @@ export function ItemEditor({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(4, 6, 12, 0.72)',
+    backgroundColor: 'rgba(48, 44, 39, 0.34)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.space.xl,

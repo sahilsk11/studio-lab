@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -8,69 +7,53 @@ import { useSettings } from '@/context/SettingsContext';
 import { IconButton } from './Button';
 import { Container } from './Screen';
 
-/** Chrome app mark — a metal tile with a film glyph. */
-export function BrandMark({ size = 30 }: { size?: number }) {
+export function BrandMark({ size = 20 }: { size?: number }) {
   return (
     <View
       style={[
         styles.mark,
-        { width: size, height: size, borderRadius: size * 0.31 },
-        theme.shadow.sm,
+        { width: size, height: size, borderRadius: Math.max(4, size * 0.27) },
       ]}>
-      <LinearGradient
-        colors={theme.metal.chrome}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <LinearGradient
-        colors={theme.metal.convex}
-        locations={[0, 0.45, 0.72, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <Ionicons name="film" size={size * 0.5} color={theme.textOnMetal} />
+      <View style={styles.markCut} />
     </View>
   );
 }
 
-/**
- * Persistent top bar. Shows the brand, a live status pill when the app is in
- * demo mode, and the settings entry point.
- */
 export function AppHeader({
   title,
   onBack,
   right,
   showSettings = true,
+  dark = false,
 }: {
   title?: string;
   onBack?: () => void;
   right?: React.ReactNode;
-  /** Turn off on the settings route itself. */
   showSettings?: boolean;
+  dark?: boolean;
 }) {
   const router = useRouter();
   const { settings, tap } = useSettings();
 
   return (
     <Container>
-      <View style={styles.bar}>
+      <View style={[styles.bar, dark && styles.barDark]}>
         <View style={styles.left}>
           {onBack ? (
             <IconButton
               icon="chevron-back"
               accessibilityLabel="Go back"
-              size={36}
+              size={34}
+              color={dark ? '#FFFDF8' : theme.text}
+              style={dark ? styles.iconButtonDark : undefined}
               onPress={onBack}
             />
           ) : (
             <BrandMark />
           )}
-
-          <View style={styles.titleBlock}>
-            <Text style={styles.wordmark}>{title ?? 'Studio Lab'}</Text>
-            {!title ? <Text style={styles.tagline}>AI video studio</Text> : null}
-          </View>
+          <Text numberOfLines={1} style={[styles.wordmark, dark && styles.wordmarkDark]}>
+            {title ?? 'Reel'}
+          </Text>
         </View>
 
         <View style={styles.right}>
@@ -82,7 +65,7 @@ export function AppHeader({
                 tap('light');
                 router.push('/settings');
               }}
-              style={styles.demoPill}>
+              style={({ pressed }) => [styles.demoPill, pressed && styles.pressed]}>
               <View style={styles.demoDot} />
               <Text style={styles.demoText}>DEMO</Text>
             </Pressable>
@@ -93,7 +76,7 @@ export function AppHeader({
             <IconButton
               icon="options-outline"
               accessibilityLabel="Settings"
-              size={36}
+              size={34}
               onPress={() => router.push('/settings')}
             />
           ) : null}
@@ -105,43 +88,47 @@ export function AppHeader({
 
 const styles = StyleSheet.create({
   bar: {
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: theme.space.xl,
-    paddingTop: theme.space.md,
-    paddingBottom: theme.space.md,
+    paddingVertical: 10,
     gap: theme.space.md,
   },
+  barDark: { backgroundColor: '#302C27' },
   left: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.space.md,
-    flex: 1,
-    minWidth: 0,
+    gap: 10,
   },
   mark: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: theme.accent,
     overflow: 'hidden',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
   },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0,
+  markCut: {
+    width: '42%',
+    height: '42%',
+    borderBottomLeftRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.32)',
   },
   wordmark: {
+    flexShrink: 1,
     fontFamily: theme.font.sans,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: '600',
     color: theme.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.18,
   },
-  tagline: {
-    fontFamily: theme.font.sans,
-    fontSize: 11.5,
-    color: theme.textTertiary,
-    letterSpacing: -0.05,
-    marginTop: 1,
+  wordmarkDark: { color: '#FFFDF8' },
+  iconButtonDark: {
+    backgroundColor: 'rgba(255,253,248,0.12)',
+    borderColor: 'rgba(255,253,248,0.3)',
   },
   right: {
     flexDirection: 'row',
@@ -149,15 +136,15 @@ const styles = StyleSheet.create({
     gap: theme.space.sm,
   },
   demoPill: {
+    height: 25,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 26,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     borderRadius: theme.radius.pill,
     backgroundColor: theme.warningDim,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(251,191,36,0.4)',
+    borderWidth: 1,
+    borderColor: '#E8C895',
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
   demoDot: {
@@ -167,10 +154,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.warning,
   },
   demoText: {
-    fontFamily: theme.font.sans,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: theme.font.mono,
+    fontSize: 9.5,
+    fontWeight: '500',
     letterSpacing: 0.8,
     color: theme.warning,
   },
+  pressed: { opacity: 0.7 },
 });
