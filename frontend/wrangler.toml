@@ -1,0 +1,8 @@
+name = "studio-lab"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-02"
+
+# Fly origin. Access sits on studiolab.ultron.sh; the API verifies the JWT
+# the Pages Function forwards from Cf-Access-Jwt-Assertion / CF_Authorization.
+[vars]
+API_ORIGIN = "https://studio-lab.fly.dev"
