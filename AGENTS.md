@@ -22,7 +22,8 @@ Start the API before the frontend. Both are started as long-running dev servers 
 
 ### OpenRouter API key (required for real generation)
 
-- Real AI generation (storyboard text, images, video) goes through OpenRouter and requires `OPENROUTER_API_KEY`, set in `api/.env`.
+- Real AI generation (storyboard text, images, video) goes through OpenRouter and requires `OPENROUTER_API_KEY`, read from `api/.env` (gitignored) or the process environment.
+- Gotcha: a dev server started in a shell/tmux session that predates a newly-injected secret will NOT see it (`/health` shows `hasKey:false`). Put the key in `api/.env` and/or restart `npm run dev` from a fresh shell so it is picked up.
 - Without the key the API still boots and `GET /health` returns `{"ok":true,"hasKey":false}`, but the generation endpoints (`/api/cast`, `/api/scenes`, `/api/frames`, `/api/images`, `/api/video`) fail with `"OPENROUTER_API_KEY is not set"`.
 - To exercise the full pipeline end-to-end WITHOUT a key, enable the frontend's **Demo mode** (Settings → Developer → "Demo mode"). It swaps in bundled sample assets and skips all API calls, so the whole idea → cast → scenes → frames → images → video flow works offline.
 
