@@ -27,10 +27,12 @@ import {
   Mono,
   ProgressRail,
   Screen,
+  SIDEBAR_INSET,
   Shimmer,
   StatusBadge,
-  StepRail,
+  StepSidebar,
   Title,
+  useDesktopLayout,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
@@ -44,7 +46,7 @@ const GAP = theme.space.md;
 export default function ScenesReviewScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const desktop = width >= 900;
+  const desktop = useDesktopLayout();
   const {
     project,
     hydrated,
@@ -66,7 +68,7 @@ export default function ScenesReviewScreen() {
   const selected = frames.find((frame) => frame.id === selectedId) ?? frames[0];
   const contentWidth = Math.max(
     280,
-    Math.min(width - PAGE_PAD * 2, CONTENT_MAX_WIDTH) - (desktop ? 224 : 0),
+    Math.min(width - PAGE_PAD * 2, CONTENT_MAX_WIDTH) - (desktop ? SIDEBAR_INSET : 0),
   );
   const columns = contentWidth >= 840 ? 5 : contentWidth >= 680 ? 4 : contentWidth >= 470 ? 3 : 2;
   const cardWidth = (contentWidth - GAP * (columns - 1)) / columns;
@@ -123,14 +125,8 @@ export default function ScenesReviewScreen() {
         )
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.stack, desktop && styles.stackDesktop]}>
-          <GlassCard
-            radius={theme.radius.md}
-            style={desktop ? styles.railCardDesktop : undefined}>
-            <View style={styles.railInner}>
-              <StepRail current="Scenes" orientation={desktop ? 'vertical' : 'horizontal'} />
-            </View>
-          </GlassCard>
+        <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
+          <StepSidebar current="Scenes" />
 
           <View style={styles.headingRow}>
             <View style={styles.headingCopy}>
@@ -310,16 +306,6 @@ const styles = StyleSheet.create({
     paddingBottom: theme.space.xxl,
   },
   stack: { gap: theme.space.xl },
-  stackDesktop: { paddingLeft: 224 },
-  railInner: { paddingHorizontal: theme.space.sm, paddingVertical: theme.space.md },
-  railCardDesktop: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 200,
-    borderRadius: 0,
-  },
   headingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.lg },
   headingCopy: { flex: 1, gap: theme.space.sm },
   progressBlock: { gap: theme.space.sm },

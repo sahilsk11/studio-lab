@@ -14,7 +14,15 @@ import {
 } from 'react-native';
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
-import { AppHeader, Button, Container, Screen, StepRail } from '@/components/ui';
+import {
+  AppHeader,
+  Button,
+  Container,
+  Screen,
+  SIDEBAR_INSET,
+  StepSidebar,
+  useDesktopLayout,
+} from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -49,7 +57,7 @@ export default function CastScreen() {
   const [advancing, setAdvancing] = useState(false);
 
   const compact = width < 700;
-  const desktop = width >= 900;
+  const desktop = useDesktopLayout();
   const empty = project.people.length === 0 && project.things.length === 0;
   const items = useMemo<CastSelection[]>(
     () => [
@@ -157,10 +165,8 @@ export default function CastScreen() {
         </View>
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.container, desktop && styles.containerDesktop]}>
-          <View style={[styles.railCard, desktop && styles.railCardDesktop]}>
-            <StepRail current="Cast" orientation={desktop ? 'vertical' : 'horizontal'} />
-          </View>
+        <Container style={[styles.container, desktop && { paddingLeft: SIDEBAR_INSET }]}>
+          <StepSidebar current="Cast" />
 
           <View style={[styles.heading, compact && styles.headingCompact]}>
             <View style={styles.headingCopy}>
@@ -427,29 +433,7 @@ const styles = StyleSheet.create({
     paddingTop: theme.space.sm,
     paddingBottom: theme.space.xxxl,
   },
-  container: { maxWidth: 1020, gap: theme.space.xl },
-  containerDesktop: { maxWidth: 1120, paddingLeft: 224 },
-  railCard: {
-    paddingHorizontal: theme.space.md,
-    paddingVertical: theme.space.md,
-    backgroundColor: theme.surface,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: theme.radius.sm,
-  },
-  railCardDesktop: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 200,
-    paddingHorizontal: theme.space.sm,
-    paddingVertical: theme.space.lg,
-    borderRadius: 0,
-    borderTopWidth: 0,
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-  },
+  container: { maxWidth: 1120, gap: theme.space.xl },
   heading: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.xl },
   headingCompact: { flexDirection: 'column', alignItems: 'flex-start' },
   headingCopy: { flex: 1, gap: 5 },

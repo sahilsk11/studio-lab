@@ -27,8 +27,10 @@ import {
   Mono,
   ProgressRail,
   Screen,
-  StepRail,
+  SIDEBAR_INSET,
+  StepSidebar,
   Title,
+  useDesktopLayout,
 } from '@/components/ui';
 import { fill, theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
@@ -66,7 +68,7 @@ export default function WatchScreen() {
     [...project.frames].sort((a, b) => a.order - b.order).find((frame) => frame.imageUri)?.imageUri ??
     project.scenes.find((scene) => scene.imageUri)?.imageUri;
   const isWide = width >= 720;
-  const desktop = width >= 900;
+  const desktop = useDesktopLayout();
   const darkMobile = !isWide;
 
   useEffect(() => {
@@ -152,18 +154,8 @@ export default function WatchScreen() {
         style={darkMobile ? styles.mobileScreen : undefined}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, darkMobile && styles.scrollDark]}>
-        <Container style={[styles.stack, desktop && styles.stackDesktop]}>
-          <GlassCard
-            radius={theme.radius.md}
-            style={desktop ? styles.railCardDesktop : darkMobile ? styles.railCardMobileDark : undefined}>
-            <View style={styles.railInner}>
-              <StepRail
-                current="Watch"
-                orientation={desktop ? 'vertical' : 'horizontal'}
-                dark={darkMobile}
-              />
-            </View>
-          </GlassCard>
+        <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
+          <StepSidebar current="Watch" dark={darkMobile} />
 
           {failed ? (
             <Callout
@@ -475,20 +467,6 @@ const styles = StyleSheet.create({
   },
   scrollDark: { backgroundColor: '#302C27' },
   stack: { gap: theme.space.xl },
-  stackDesktop: { paddingLeft: 224 },
-  railInner: { paddingHorizontal: theme.space.sm, paddingVertical: theme.space.md },
-  railCardDesktop: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 200,
-    borderRadius: 0,
-  },
-  railCardMobileDark: {
-    backgroundColor: '#3A342F',
-    borderColor: '#5D544B',
-  },
   editorial: { alignItems: 'center', gap: theme.space.xxl },
   editorialWide: { flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch' },
   editorialNarrow: { flexDirection: 'column' },

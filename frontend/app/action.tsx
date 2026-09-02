@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -23,8 +22,10 @@ import {
   GlassCard,
   Mono,
   Screen,
-  StepRail,
+  SIDEBAR_INSET,
+  StepSidebar,
   Title,
+  useDesktopLayout,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
@@ -36,8 +37,7 @@ const PAGE_PAD = theme.space.xl;
 
 export default function ActionScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const desktop = width >= 900;
+  const desktop = useDesktopLayout();
   const {
     project,
     hydrated,
@@ -141,14 +141,8 @@ export default function ActionScreen() {
         />
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.stack, desktop && styles.stackDesktop]}>
-          <GlassCard
-            radius={theme.radius.md}
-            style={desktop ? styles.railCardDesktop : undefined}>
-            <View style={styles.railInner}>
-              <StepRail current="Action" orientation={desktop ? 'vertical' : 'horizontal'} />
-            </View>
-          </GlassCard>
+        <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
+          <StepSidebar current="Action" />
 
           <View style={styles.headingRow}>
             <View style={styles.headingCopy}>
@@ -315,16 +309,6 @@ const styles = StyleSheet.create({
     paddingBottom: theme.space.xxl,
   },
   stack: { gap: theme.space.xl },
-  stackDesktop: { paddingLeft: 224 },
-  railInner: { paddingHorizontal: theme.space.sm, paddingVertical: theme.space.md },
-  railCardDesktop: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 200,
-    borderRadius: 0,
-  },
   headingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.lg },
   headingCopy: { flex: 1, gap: theme.space.sm },
   beatRail: { flexDirection: 'row', height: 6, gap: 3 },
