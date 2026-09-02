@@ -18,7 +18,25 @@ Start the API before the frontend. Both are started as long-running dev servers 
 
 ### Lint / test / typecheck
 
-- There are no ESLint configs and no automated test scripts in either project. Use `npx tsc --noEmit` (run inside `api/` and `frontend/` separately) as the type/lint check; both pass clean.
+- No ESLint configs. Run `npm run typecheck` and `npm run test` inside `api/` and `frontend/` separately.
+- API tests cover Cloudflare Access JWT verification and fail-closed Express middleware.
+- Frontend tests cover Pages Functions (`functions/_lib/*`) for Access JWT extraction and Fly proxying.
+
+### Production deploy (Cloudflare Pages + Fly.io)
+
+Production hostname: **https://studiolab.ultron.sh** (Cloudflare Access on `*.ultron.sh`, team `sahilagentserver.cloudflareaccess.com`).
+
+| Layer | Host | Notes |
+|---|---|---|
+| Frontend | Cloudflare Pages (`frontend/wrangler.toml`) | Static Expo web export → `dist/` |
+| API proxy | Pages Functions `/api/*`, `/media/*`, `/health` | Forwards Access JWT to Fly |
+| API | Fly.io app `studio-lab` (`api/fly.toml`) | SQLite + media on `/data` volume |
+
+**Local dev** uses `http://localhost:3001` directly (Access verification disabled unless `CLOUDFLARE_ACCESS_*` env vars are set).
+
+**Production frontend build** sets `EXPO_PUBLIC_API_URL=` (empty) so the SPA calls same-origin `/api/*` through Pages Functions — never `*.fly.dev` from the browser.
+
+See `README.md` for operator steps (Fly launch, volume, secrets, Pages project).
 
 ### OpenRouter API key (required for real generation)
 

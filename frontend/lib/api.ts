@@ -1,6 +1,8 @@
 import type { ImageKind, Project } from '@/types/project';
 
-export const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001';
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL;
+export const DEFAULT_API_URL =
+  configuredApiUrl !== undefined ? configuredApiUrl : 'http://localhost:3001';
 
 let apiBaseUrl = DEFAULT_API_URL;
 

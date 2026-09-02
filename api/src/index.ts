@@ -5,17 +5,47 @@ import { z } from 'zod';
 
 import { runCast, runFrames, runImage, runScenes, runVideo } from './actions.js';
 import { MEDIA_DIR, PORT, VIDEO_TIMEOUT_MS } from './config.js';
+import {
+  CloudflareAccessError,
+  createCloudflareAccessVerifier,
+  loadCloudflareAccessConfig,
+} from './cloudflare-access.js';
 import { deleteItem, ensureProject, patchItem, patchProject, resetProject } from './store.js';
 import type { ImageKind } from './types.js';
 
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: '2mb' }));
-app.use('/media', express.static(MEDIA_DIR, { maxAge: '1h', fallthrough: false }));
+const cloudflareAccessConfig = loadCloudflareAccessConfig(process.env);
+const cloudflareAccess = cloudflareAccessConfig
+  ? createCloudflareAccessVerifier(cloudflareAccessConfig)
+  : null;
 
-app.get('/health', (_req, res) => {
+const corsOrigin = process.env.CORS_ALLOWED_ORIGIN?.trim();
+const app = express();
+app.use(corsOrigin ? cors({ origin: corsOrigin }) : cors());
+app.use(express.json({ limit: '2mb' }));
+
+function healthPayload(_req: express.Request, res: express.Response) {
   res.json({ ok: true, hasKey: Boolean(process.env.OPENROUTER_API_KEY) });
+}
+
+app.get('/health', healthPayload);
+app.get('/healthz', healthPayload);
+
+app.use(async (req, res, next) => {
+  if (!cloudflareAccess) return next();
+
+  try {
+    await cloudflareAccess.verify(req.headers);
+    next();
+  } catch (error) {
+    if (error instanceof CloudflareAccessError) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+    next(error);
+  }
 });
+
+app.use('/media', express.static(MEDIA_DIR, { maxAge: '1h', fallthrough: false }));
 
 app.get('/api/project', (_req, res) => {
   try {
@@ -182,6 +212,7 @@ function safeProject() {
   }
 }
 
-app.listen(PORT, () => {
-  console.log(`Studio Lab API http://localhost:${PORT}`);
+const host = process.env.HOST ?? '0.0.0.0';
+app.listen(PORT, host, () => {
+  console.log(`Studio Lab API http://${host}:${PORT}`);
 });
