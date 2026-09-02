@@ -15,10 +15,10 @@ export default function NotFoundScreen() {
           <BrandMark size={44} />
           <Title>This screen doesn't exist</Title>
           <Body style={styles.sub}>
-            The page you were looking for isn't part of the studio.
+            The page you were looking for isn't part of this reel.
           </Body>
           <Button
-            label="Back to the studio"
+            label="Back to Reel"
             icon="arrow-back"
             inline
             onPress={() => router.replace('/')}

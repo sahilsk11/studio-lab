@@ -1,16 +1,14 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet } from 'react-native';
 
-import { fill, theme } from '@/constants/theme';
+import { theme } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 
-const W = 50;
-const H = 30;
+const WIDTH = 46;
+const HEIGHT = 27;
 const PAD = 3;
-const THUMB = H - PAD * 2;
+const THUMB = HEIGHT - PAD * 2;
 
-/** Glass track with a polished metal thumb. */
 export function Toggle({
   value,
   onValueChange,
@@ -22,25 +20,25 @@ export function Toggle({
   disabled?: boolean;
   accessibilityLabel: string;
 }) {
-  const { accent, animate, tap } = useSettings();
-  const pos = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const { tap } = useSettings();
+  const position = useRef(new Animated.Value(value ? 1 : 0)).current;
 
   useEffect(() => {
-    if (!animate) {
-      pos.setValue(value ? 1 : 0);
-      return;
-    }
-    Animated.timing(pos, {
+    Animated.timing(position, {
       toValue: value ? 1 : 0,
-      duration: 200,
-      easing: Easing.bezier(0.34, 1.3, 0.64, 1),
-      useNativeDriver: true,
+      duration: 170,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
     }).start();
-  }, [value, animate, pos]);
+  }, [value, position]);
 
-  const translateX = pos.interpolate({
+  const translateX = position.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, W - THUMB - PAD * 2],
+    outputRange: [0, WIDTH - THUMB - PAD * 2],
+  });
+  const trackColor = position.interpolate({
+    inputRange: [0, 1],
+    outputRange: [theme.surfaceMuted, theme.accent],
   });
 
   return (
@@ -53,68 +51,35 @@ export function Toggle({
         tap(value ? 'light' : 'medium');
         onValueChange(!value);
       }}
-      style={[styles.track, disabled && styles.disabled]}>
-      {/* Off state */}
-      <View style={styles.trackOff} />
-
-      {/* On state fades in over the top */}
-      <Animated.View style={[StyleSheet.absoluteFill, styles.round, { opacity: pos }]}>
-        <LinearGradient
-          colors={accent.ramp}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFill, styles.round]}
-        />
-      </Animated.View>
-
-      <View style={[StyleSheet.absoluteFill, styles.round, styles.rim]} />
-
-      <Animated.View style={[styles.thumb, theme.shadow.sm, { transform: [{ translateX }] }]}>
-        <LinearGradient
-          colors={theme.metal.chrome}
-          start={{ x: 0.15, y: 0 }}
-          end={{ x: 0.85, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <LinearGradient
-          colors={theme.metal.convex}
-          locations={[0, 0.45, 0.72, 1]}
-          style={StyleSheet.absoluteFill}
-        />
+      style={[styles.hit, disabled && styles.disabled]}>
+      <Animated.View style={[styles.track, { backgroundColor: trackColor }]}>
+        <Animated.View style={[styles.thumb, { transform: [{ translateX }] }]} />
       </Animated.View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  track: {
-    width: W,
-    height: H,
-    borderRadius: H / 2,
-    padding: PAD,
-    justifyContent: 'center',
-    overflow: 'hidden',
+  hit: {
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  trackOff: {
-    ...fill,
-    borderRadius: H / 2,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-  },
-  round: {
-    borderRadius: H / 2,
-  },
-  rim: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.glass.borderStrong,
-  },
-  disabled: {
-    opacity: 0.4,
+  track: {
+    width: WIDTH,
+    height: HEIGHT,
+    padding: PAD,
+    justifyContent: 'center',
+    borderRadius: HEIGHT / 2,
+    borderWidth: 1,
+    borderColor: theme.borderStrong,
   },
   thumb: {
     width: THUMB,
     height: THUMB,
     borderRadius: THUMB / 2,
-    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#D8CEC1',
+    ...theme.shadow.sm,
   },
+  disabled: { opacity: 0.4 },
 });

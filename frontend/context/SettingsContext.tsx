@@ -1,19 +1,10 @@
 import * as Haptics from 'expo-haptics';
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 
-import { ACCENTS, GLASS_LEVELS, type Accent } from '@/constants/theme';
+import { CHROMA, type Accent } from '@/constants/theme';
 import { setApiBaseUrl } from '@/lib/api';
 import {
-  clearSettings,
   DEFAULT_SETTINGS,
   loadSettings,
   saveSettings,
@@ -25,17 +16,11 @@ type Impact = 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error';
 type SettingsContextValue = {
   settings: AppSettings;
   hydrated: boolean;
-  /** Resolved accent palette for the current selection. */
+  /** The product has one deliberate chroma accent. */
   accent: Accent;
-  /** Blur radius the frosted materials should use. */
-  blur: number;
-  /** Backdrop orb opacity for the current glass level. */
-  orbOpacity: number;
-  /** False when the user has asked for reduced motion. */
-  animate: boolean;
+  /** Motion is part of progress feedback rather than a visual preference. */
+  animate: true;
   set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
-  resetSettings: () => Promise<void>;
-  /** No-ops on web and when the haptics preference is off. */
   tap: (kind?: Impact) => void;
 };
 
@@ -44,8 +29,6 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [hydrated, setHydrated] = useState(false);
-  const hapticsRef = useRef(settings.haptics);
-  hapticsRef.current = settings.haptics;
 
   useEffect(() => {
     loadSettings().then((loaded) => {
@@ -57,67 +40,56 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    const t = setTimeout(() => saveSettings(settings), 250);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => saveSettings(settings), 250);
+    return () => clearTimeout(timer);
   }, [settings, hydrated]);
 
   const set = useCallback<SettingsContextValue['set']>((key, value) => {
-    setSettings((prev) => {
-      if (prev[key] === value) return prev;
+    setSettings((previous) => {
+      if (previous[key] === value) return previous;
       if (key === 'apiUrl') setApiBaseUrl(value as string);
-      return { ...prev, [key]: value };
+      return { ...previous, [key]: value };
     });
   }, []);
 
-  const resetSettings = useCallback(async () => {
-    await clearSettings();
-    setSettings(DEFAULT_SETTINGS);
-    setApiBaseUrl(DEFAULT_SETTINGS.apiUrl);
-  }, []);
-
   const tap = useCallback((kind: Impact = 'light') => {
-    if (Platform.OS === 'web' || !hapticsRef.current) return;
-    switch (kind) {
-      case 'success':
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        break;
-      case 'warning':
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        break;
-      case 'error':
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        break;
-      case 'medium':
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        break;
-      case 'heavy':
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        break;
-      default:
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'web') return;
+
+    if (kind === 'success' || kind === 'warning' || kind === 'error') {
+      const notification = {
+        success: Haptics.NotificationFeedbackType.Success,
+        warning: Haptics.NotificationFeedbackType.Warning,
+        error: Haptics.NotificationFeedbackType.Error,
+      }[kind];
+      void Haptics.notificationAsync(notification);
+      return;
     }
+
+    const impact = {
+      light: Haptics.ImpactFeedbackStyle.Light,
+      medium: Haptics.ImpactFeedbackStyle.Medium,
+      heavy: Haptics.ImpactFeedbackStyle.Heavy,
+    }[kind];
+    void Haptics.impactAsync(impact);
   }, []);
 
-  const value = useMemo<SettingsContextValue>(() => {
-    const level = GLASS_LEVELS[settings.glassLevel] ?? GLASS_LEVELS.balanced;
-    return {
+  const value = useMemo<SettingsContextValue>(
+    () => ({
       settings,
       hydrated,
-      accent: ACCENTS[settings.accent] ?? ACCENTS.chrome,
-      blur: level.blur,
-      orbOpacity: level.orbOpacity,
-      animate: !settings.reduceMotion,
+      accent: CHROMA,
+      animate: true,
       set,
-      resetSettings,
       tap,
-    };
-  }, [settings, hydrated, set, resetSettings, tap]);
+    }),
+    [settings, hydrated, set, tap],
+  );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 
 export function useSettings() {
-  const ctx = useContext(SettingsContext);
-  if (!ctx) throw new Error('useSettings must be used within SettingsProvider');
-  return ctx;
+  const value = useContext(SettingsContext);
+  if (!value) throw new Error('useSettings must be used within SettingsProvider');
+  return value;
 }

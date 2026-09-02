@@ -1,5 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -9,117 +7,69 @@ import { useSettings } from '@/context/SettingsContext';
 import { canNavigateToStep, stepRoute } from '@/lib/project';
 import { STEPS, type Step } from '@/types/project';
 
-const ICONS: Record<Step, keyof typeof Ionicons.glyphMap> = {
-  Idea: 'sparkles',
-  Cast: 'people',
-  Scenes: 'images',
-  Frames: 'layers',
-  Video: 'play-circle',
-};
-
-/**
- * Wizard progress. Completed steps get a filled accent node and are tappable;
- * the current step gets a metal node with a glow ring.
- */
-export function StepRail({ current }: { current: Step }) {
+/** Seven-step, bidirectional project rail. */
+export function StepRail({
+  current,
+  orientation = 'horizontal',
+  dark = false,
+}: {
+  current: Step;
+  orientation?: 'horizontal' | 'vertical';
+  dark?: boolean;
+}) {
   const router = useRouter();
   const { project } = useProject();
-  const { accent, tap } = useSettings();
-  const currentIdx = STEPS.indexOf(current);
-  const projectReady =
-    Array.isArray(project.people) &&
-    Array.isArray(project.things) &&
-    Array.isArray(project.scenes) &&
-    Array.isArray(project.frames);
+  const { tap } = useSettings();
+  const currentIndex = STEPS.indexOf(current);
 
   return (
-    <View style={styles.rail} accessibilityRole="tablist">
-      {STEPS.map((step, i) => {
-        const reachable = projectReady && canNavigateToStep(project, step);
-        const isCurrent = i === currentIdx;
-        const isDone = i < currentIdx;
-        const active = isCurrent || isDone;
+    <View
+      style={[styles.rail, orientation === 'vertical' && styles.railVertical]}
+      accessibilityRole="tablist">
+      {STEPS.map((step, index) => {
+        const reachable = canNavigateToStep(project, step);
+        const isCurrent = step === current;
+        const isDone = index < currentIndex;
 
         return (
-          <View key={step} style={styles.segment}>
-            {i > 0 ? (
-              <View style={styles.connector}>
-                <View
-                  style={[
-                    styles.connectorLine,
-                    { backgroundColor: active ? accent.tint : 'rgba(255,255,255,0.10)' },
-                  ]}
-                />
-              </View>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isCurrent, disabled: !reachable }}
-              accessibilityLabel={`Step ${i + 1}: ${step}`}
-              disabled={!reachable || isCurrent}
-              onPress={() => {
-                tap('light');
-                router.push(stepRoute(step) as never);
-              }}
-              style={styles.item}>
-              <View
-                style={[
-                  styles.node,
-                  { borderColor: active ? accent.tint : 'rgba(255,255,255,0.14)' },
-                  isCurrent && [
-                    styles.nodeCurrent,
-                    Platform.select({
-                      web: { boxShadow: `0 0 0 4px ${accent.glow}` },
-                      default: {
-                        shadowColor: accent.tint,
-                        shadowOpacity: 0.7,
-                        shadowRadius: 10,
-                        shadowOffset: { width: 0, height: 0 },
-                      },
-                    }),
-                  ],
-                ]}>
-                {isCurrent ? (
-                  <LinearGradient
-                    colors={theme.metal.chrome}
-                    start={{ x: 0.1, y: 0 }}
-                    end={{ x: 0.9, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                ) : isDone ? (
-                  <LinearGradient
-                    colors={accent.ramp}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                ) : null}
-
-                <Ionicons
-                  name={isDone ? 'checkmark' : ICONS[step]}
-                  size={12}
-                  color={active ? theme.textOnMetal : theme.textQuaternary}
-                />
-              </View>
-
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.label,
-                  {
-                    color: isCurrent
-                      ? theme.text
-                      : isDone
-                        ? theme.textSecondary
-                        : theme.textQuaternary,
-                    fontWeight: isCurrent ? '700' : '500',
-                  },
-                ]}>
-                {step}
-              </Text>
-            </Pressable>
-          </View>
+          <Pressable
+            key={step}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isCurrent, disabled: !reachable }}
+            accessibilityLabel={`Step ${index + 1} of ${STEPS.length}: ${step}`}
+            disabled={!reachable || isCurrent}
+            onPress={() => {
+              tap('light');
+              router.push(stepRoute(step) as never);
+            }}
+            style={({ pressed }) => [
+              styles.item,
+              orientation === 'vertical' && styles.itemVertical,
+              isCurrent && styles.current,
+              isCurrent && dark && styles.currentDark,
+              !reachable && styles.unreachable,
+              pressed && styles.pressed,
+            ]}>
+            <View
+              style={[
+                styles.dot,
+                dark && styles.dotDark,
+                isDone && styles.dotDone,
+                isCurrent && styles.dotCurrent,
+              ]}
+            />
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.label,
+                dark && styles.labelDark,
+                isDone && styles.labelDone,
+                isDone && dark && styles.labelDoneDark,
+                isCurrent && styles.labelCurrent,
+              ]}>
+              {step}
+            </Text>
+          </Pressable>
         );
       })}
     </View>
@@ -128,51 +78,71 @@ export function StepRail({ current }: { current: Step }) {
 
 const styles = StyleSheet.create({
   rail: {
+    width: '100%',
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: theme.space.xs,
+    alignItems: 'center',
+    gap: 2,
   },
-  segment: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  connector: {
-    flex: 1,
-    height: 22,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  connectorLine: {
-    height: 1.5,
-    borderRadius: 1,
-    opacity: 0.7,
+  railVertical: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 3,
   },
   item: {
-    alignItems: 'center',
-    gap: 5,
-    // Five labels ("Scenes") have to fit a phone width; shrink before connectors.
-    width: 56,
-    flexShrink: 1,
     minWidth: 0,
-    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
-  },
-  node: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
+    minHeight: 43,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    gap: 4,
+    paddingHorizontal: 2,
+    borderRadius: theme.radius.sm,
+    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  nodeCurrent: {
-    borderColor: 'rgba(255,255,255,0.6)',
+  itemVertical: {
+    width: '100%',
+    minHeight: 38,
+    flex: 0,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 10,
+    gap: 10,
+  },
+  current: {
+    backgroundColor: theme.accentSoft,
+  },
+  currentDark: { backgroundColor: 'rgba(217,91,56,0.2)' },
+  unreachable: { opacity: 0.48 },
+  pressed: { opacity: 0.64 },
+  dot: {
+    width: 7,
+    height: 7,
+    flexShrink: 0,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: theme.borderStrong,
+    backgroundColor: theme.surface,
+  },
+  dotDark: { borderColor: '#7D746A', backgroundColor: '#4A433C' },
+  dotDone: {
+    borderColor: theme.info,
+    backgroundColor: theme.info,
+  },
+  dotCurrent: {
+    borderColor: theme.accent,
+    backgroundColor: theme.accent,
   },
   label: {
     fontFamily: theme.font.sans,
-    fontSize: 10,
-    letterSpacing: -0.05,
+    fontSize: 9.5,
+    fontWeight: '500',
+    color: theme.textTertiary,
+  },
+  labelDark: { color: '#AAA095' },
+  labelDone: { color: theme.textSecondary },
+  labelDoneDark: { color: '#E4D9CC' },
+  labelCurrent: {
+    color: theme.accentDark,
+    fontWeight: '700',
   },
 });

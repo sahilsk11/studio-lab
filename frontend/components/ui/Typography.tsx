@@ -25,11 +25,8 @@ function make(preset: keyof typeof theme.type, defaultColor: string) {
   };
 }
 
-export const Display = make('display', theme.text);
 export const Title = make('title', theme.text);
-export const Heading = make('heading', theme.text);
 export const Body = make('body', theme.textSecondary);
-export const BodyStrong = make('bodyStrong', theme.text);
 export const Caption = make('caption', theme.textSecondary);
 export const CaptionStrong = make('captionStrong', theme.text);
 export const Micro = make('micro', theme.textTertiary);
@@ -42,6 +39,7 @@ export function Eyebrow({ children, style, color, ...rest }: Props) {
       style={[
         styles.base,
         theme.type.eyebrow as TextStyle,
+        styles.technical,
         styles.upper,
         { color: color ?? theme.textTertiary },
         style,
@@ -57,7 +55,7 @@ export function Mono({ children, style, color, ...rest }: Props) {
     <Text
       {...rest}
       style={[
-        { fontFamily: theme.font.mono, fontSize: 12, letterSpacing: 0.2 },
+        { fontFamily: theme.font.mono, fontSize: 11, lineHeight: 16, letterSpacing: 0.18 },
         { color: color ?? theme.textTertiary },
         style,
       ]}>
@@ -72,5 +70,8 @@ const styles = StyleSheet.create({
   },
   upper: {
     textTransform: 'uppercase',
+  },
+  technical: {
+    fontFamily: theme.font.mono,
   },
 });

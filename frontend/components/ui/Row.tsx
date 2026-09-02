@@ -7,7 +7,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { GlassCard } from './GlassCard';
 import { Caption, CaptionStrong, Eyebrow } from './Typography';
 
-/** Titled group of rows rendered as one glass slab with hairline dividers. */
+/** Titled group of rows rendered as one paper sheet with hairline dividers. */
 export function Section({
   title,
   footnote,
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.glass.border,
+    backgroundColor: theme.border,
     marginLeft: theme.space.lg,
   },
   footnote: {
@@ -136,12 +136,10 @@ const styles = StyleSheet.create({
   pressable: {
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  pressed: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
+  pressed: { backgroundColor: theme.accentSoft },
   row: {
     paddingHorizontal: theme.space.lg,
-    paddingVertical: 13,
+    paddingVertical: 14,
     gap: theme.space.md,
   },
   disabled: {
@@ -155,7 +153,7 @@ const styles = StyleSheet.create({
   iconWell: {
     width: 28,
     height: 28,
-    borderRadius: 9,
+    borderRadius: theme.radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
