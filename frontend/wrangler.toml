@@ -1,4 +1,4 @@
-name = "studio-lab"
+name = "studiolab"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-09-02"
 

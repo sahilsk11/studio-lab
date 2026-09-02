@@ -58,6 +58,8 @@ The app also has a demo mode that uses bundled placeholder assets and does not r
 
 Architecture mirrors [ag-job-hunt](https://github.com/sahilsk11/ag-job-hunt): Cloudflare Access on the frontend hostname, Pages Functions proxy same-origin `/api/*` and `/media/*` to Fly.io, API verifies the forwarded Access JWT.
 
+**Continuous deployment:** pushes to `main` run [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — verify frontend and API, then deploy the Fly app (`studio-lab`) and Cloudflare Pages project (`studiolab`). Required GitHub repository secrets: `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Manual `fly deploy` and ad-hoc `wrangler pages deploy` still work as fallbacks.
+
 | Component | Config | Host |
 |---|---|---|
 | Frontend | `frontend/wrangler.toml` | `https://studiolab.ultron.sh` |
@@ -95,13 +97,14 @@ Find the Access application AUD in Cloudflare Zero Trust → Access → Applicat
 
 #### 2. Cloudflare Pages
 
-1. Create a Pages project connected to this repo.
-2. **Root directory:** `frontend`
-3. **Build command:** `npm ci && EXPO_PUBLIC_API_URL= npm run export:web`
-4. **Build output:** `dist`
-5. **Custom domain:** `studiolab.ultron.sh`
-6. Ensure the Access policy on `*.ultron.sh` includes this hostname (should inherit from wildcard).
-7. `API_ORIGIN` in `frontend/wrangler.toml` points at `https://studio-lab.fly.dev`; override in Pages dashboard if the Fly app name differs.
+The Pages project name is `studiolab` (direct upload via CI, not Git integration).
+
+1. Create a Pages project named `studiolab` if it does not exist (direct upload / no Git source).
+2. **Custom domain:** `studiolab.ultron.sh`
+3. Ensure the Access policy on `*.ultron.sh` includes this hostname (should inherit from wildcard).
+4. `API_ORIGIN` in `frontend/wrangler.toml` points at `https://studio-lab.fly.dev`; override in the Pages dashboard if the Fly app name differs.
+
+CI builds from `frontend/` with `EXPO_PUBLIC_API_URL= npm run export:web` and deploys `dist/` plus `frontend/functions/` via Wrangler.
 
 #### 3. Verify
 
