@@ -11,16 +11,19 @@ export function ApiAuthBridge() {
   const { reloadAfterAuth } = useProject();
   const wasSignedIn = useRef(false);
 
-  useEffect(() => {
-    if (!isClerkEnabled() || !isLoaded) {
-      setAuthTokenGetter(null);
-      setAnonymousSessionGetter(() => getAnonymousSessionId());
-      return;
-    }
-
+  if (isClerkEnabled() && isLoaded) {
     if (isSignedIn) {
       setAuthTokenGetter(() => getToken());
-      setAnonymousSessionGetter(() => getAnonymousSessionId());
+    } else {
+      setAuthTokenGetter(null);
+    }
+    setAnonymousSessionGetter(() => getAnonymousSessionId());
+  }
+
+  useEffect(() => {
+    if (!isClerkEnabled() || !isLoaded) return;
+
+    if (isSignedIn) {
       if (!wasSignedIn.current) {
         void reloadAfterAuth();
       }
@@ -28,10 +31,8 @@ export function ApiAuthBridge() {
       return;
     }
 
-    setAuthTokenGetter(null);
-    setAnonymousSessionGetter(() => getAnonymousSessionId());
     wasSignedIn.current = false;
-  }, [getToken, isSignedIn, isLoaded, reloadAfterAuth]);
+  }, [isSignedIn, isLoaded, reloadAfterAuth]);
 
   return null;
 }

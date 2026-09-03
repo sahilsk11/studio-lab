@@ -20,7 +20,11 @@ export class ClerkAuthError extends Error {
 
 export function loadClerkConfig(env: NodeJS.ProcessEnv): ClerkConfig | null {
   const secretKey = env.CLERK_SECRET_KEY?.trim();
-  if (!secretKey) return null;
+  const required = env.NODE_ENV === 'production' || Boolean(secretKey);
+  if (!required) return null;
+  if (!secretKey) {
+    throw new Error('CLERK_SECRET_KEY is required in production');
+  }
   return { secretKey };
 }
 

@@ -32,7 +32,7 @@ import {
   Title,
   useDesktopLayout,
 } from '@/components/ui';
-import { SignInGate, useRequiresSignIn } from '@/components/ui/SignInGate';
+import { SignInGate, useAuthGate } from '@/components/ui/SignInGate';
 import { fill, theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -55,11 +55,13 @@ export default function WatchScreen() {
   const { width } = useWindowDimensions();
   const { project, hydrated, testMode, error, generateVideo, refreshProject } = useProject();
   const { tap } = useSettings();
-  const requiresSignIn = useRequiresSignIn();
+  const { authReady, requiresSignIn, promptSignIn } = useAuthGate();
+  const needsSignIn = requiresSignIn && !testMode;
   const [rendering, setRendering] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [quickChange, setQuickChange] = useState<string | null>(null);
   const started = useRef(false);
+  const promptedSignIn = useRef(false);
 
   const phase = project.videoPhase ?? (project.videoReady ? 'ready' : 'idle');
   const activePhase = ['queued', 'rendering', 'downloading', 'stitching'].includes(phase);
@@ -74,14 +76,20 @@ export default function WatchScreen() {
   const darkMobile = !isWide;
 
   useEffect(() => {
-    if (!hydrated || ready || activePhase || failed || started.current || requiresSignIn) return;
+    if (!hydrated || !authReady || ready || activePhase || failed || started.current || needsSignIn) return;
     if (project.frames.length === 0) {
       router.replace('/scenes');
       return;
     }
     started.current = true;
     void renderVideo();
-  }, [hydrated, ready, activePhase, failed, project.frames.length, requiresSignIn, router]);
+  }, [hydrated, authReady, ready, activePhase, failed, project.frames.length, needsSignIn, router]);
+
+  useEffect(() => {
+    if (!hydrated || !authReady || !needsSignIn || ready || promptedSignIn.current) return;
+    promptedSignIn.current = true;
+    promptSignIn();
+  }, [hydrated, authReady, needsSignIn, ready, promptSignIn]);
 
   useEffect(() => {
     if ((!rendering && !activePhase) || testMode) return;
@@ -98,6 +106,10 @@ export default function WatchScreen() {
   }, [rendering, activePhase, project.videoStartedAt]);
 
   async function renderVideo() {
+    if (needsSignIn) {
+      promptSignIn();
+      return;
+    }
     setRendering(true);
     try {
       await generateVideo();
@@ -114,7 +126,7 @@ export default function WatchScreen() {
     await downloadMedia(project.videoUri, `${safeName(project.title || 'reel')}.mp4`);
   }
 
-  if (!hydrated) {
+  if (!hydrated || (!testMode && !authReady)) {
     return (
       <Screen header={<AppHeader title="Final cut" onBack={() => router.push('/scenes')} />}>
         <View style={styles.loading}>
@@ -136,7 +148,7 @@ export default function WatchScreen() {
           dark={darkMobile}
           onBack={() => router.push('/scenes')}
           right={
-            ready ? (
+            needsSignIn && !ready ? undefined : ready ? (
               <Button
                 label="Download"
                 icon="download-outline"
@@ -159,7 +171,7 @@ export default function WatchScreen() {
         <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
           <StepSidebar current="Watch" dark={darkMobile} />
 
-          {failed ? (
+          {failed && !needsSignIn ? (
             <Callout
               variant="error"
               title="The render stopped"
@@ -167,130 +179,133 @@ export default function WatchScreen() {
             />
           ) : null}
 
-          {requiresSignIn && !ready && !activePhase ? (
+          {needsSignIn && !ready ? (
             <SignInGate
               title="Sign in to generate your video"
               message="Your storyboard is ready. Sign in to start the final render — your project will be saved to your account."
             />
-          ) : null}
+          ) : (
+            <>
+              <View style={[styles.editorial, isWide ? styles.editorialWide : styles.editorialNarrow]}>
+                <VideoPlayer
+                  posterUri={posterUri}
+                  videoUri={project.videoUri}
+                  ready={ready}
+                  rendering={rendering || activePhase}
+                  progress={progress}
+                  durationSec={project.durationSec}
+                />
 
-          <View style={[styles.editorial, isWide ? styles.editorialWide : styles.editorialNarrow]}>
-            <VideoPlayer
-              posterUri={posterUri}
-              videoUri={project.videoUri}
-              ready={ready}
-              rendering={rendering || activePhase}
-              progress={progress}
-              durationSec={project.durationSec}
-            />
+                <View style={styles.sidePanel}>
+                  <View style={styles.titleBlock}>
+                    <Mono color={darkMobile ? '#C8BCAF' : undefined}>
+                      {ready ? 'FINAL CUT' : 'RENDERING FINAL CUT'}
+                    </Mono>
+                    <Title color={darkMobile ? '#FFFDF8' : undefined}>
+                      {failed
+                        ? 'This version needs another pass'
+                        : ready
+                          ? `Done — ${project.durationSec} seconds`
+                          : 'Building your reel'}
+                    </Title>
+                    <Body color={darkMobile ? '#D5CBC0' : undefined}>{status}</Body>
+                  </View>
 
-            <View style={styles.sidePanel}>
-              <View style={styles.titleBlock}>
-                <Mono color={darkMobile ? '#C8BCAF' : undefined}>
-                  {ready ? 'FINAL CUT' : 'RENDERING FINAL CUT'}
-                </Mono>
-                <Title color={darkMobile ? '#FFFDF8' : undefined}>
-                  {failed
-                    ? 'This version needs another pass'
-                    : ready
-                      ? `Done — ${project.durationSec} seconds`
-                      : 'Building your reel'}
-                </Title>
-                <Body color={darkMobile ? '#D5CBC0' : undefined}>{status}</Body>
+                  {!ready && !failed ? (
+                    <GlassCard tone="raised" radius={theme.radius.md}>
+                      <View style={styles.renderStatus}>
+                        <View style={styles.renderHeader}>
+                          <CaptionStrong>{phaseLabel(phase)}</CaptionStrong>
+                          <Mono>{progress}%</Mono>
+                        </View>
+                        <ProgressRail value={progress} total={100} />
+                        <Caption>
+                          {project.videoClipTotal && project.videoClipTotal > 1
+                            ? `Clip ${project.videoClipIndex ?? 1} of ${project.videoClipTotal}`
+                            : `${project.frames.length} scenes in this cut`}
+                        </Caption>
+                      </View>
+                    </GlassCard>
+                  ) : null}
+
+                  {ready ? (
+                    <View style={styles.quickSection}>
+                      <Mono color={darkMobile ? '#C8BCAF' : undefined}>QUICK CHANGES</Mono>
+                      <View style={styles.quickChips}>
+                        {['slower pacing', 'warmer light', 'tighter ending', 'more camera motion'].map((label) => (
+                          <Pressable
+                            key={label}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: quickChange === label }}
+                            onPress={() => {
+                              tap('light');
+                              setQuickChange((current) => (current === label ? null : label));
+                            }}
+                            style={[
+                              styles.quickChip,
+                              darkMobile && styles.quickChipDark,
+                              quickChange === label && styles.quickChipSelected,
+                            ]}>
+                            <Text
+                              style={[
+                                styles.quickChipText,
+                                darkMobile && styles.quickChipTextDark,
+                                quickChange === label && styles.quickChipTextSelected,
+                              ]}>
+                              {label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.actions}>
+                    {failed ? (
+                      <Button
+                        label="Retry render"
+                        icon="refresh-outline"
+                        size="lg"
+                        loading={rendering}
+                        onPress={() => void renderVideo()}
+                      />
+                    ) : ready ? (
+                      <>
+                        <Button
+                          label={quickChange ? `Make “${quickChange}” version` : 'Make another version'}
+                          icon="sparkles"
+                          size="lg"
+                          loading={rendering}
+                          onPress={() => void renderVideo()}
+                        />
+                        <Button
+                          label="Download 1080×1920"
+                          icon="download-outline"
+                          size="md"
+                          variant="secondary"
+                          disabled={!project.videoUri}
+                          onPress={() => void handleDownload()}
+                        />
+                      </>
+                    ) : (
+                      <Button label={phaseLabel(phase)} size="lg" loading disabled onPress={() => {}} />
+                    )}
+                  </View>
+                </View>
               </View>
 
-              {!ready && !failed ? (
-                <GlassCard tone="raised" radius={theme.radius.md}>
-                  <View style={styles.renderStatus}>
-                    <View style={styles.renderHeader}>
-                      <CaptionStrong>{phaseLabel(phase)}</CaptionStrong>
-                      <Mono>{progress}%</Mono>
-                    </View>
-                    <ProgressRail value={progress} total={100} />
-                    <Caption>
-                      {project.videoClipTotal && project.videoClipTotal > 1
-                        ? `Clip ${project.videoClipIndex ?? 1} of ${project.videoClipTotal}`
-                        : `${project.frames.length} scenes in this cut`}
-                    </Caption>
+              {ready ? (
+                <GlassCard radius={theme.radius.lg}>
+                  <View style={styles.deliveryRow}>
+                    <DeliveryStat icon="time-outline" label="Duration" value={`${project.durationSec}s`} />
+                    <DeliveryStat icon="resize-outline" label="Format" value="9:16" />
+                    <DeliveryStat icon="images-outline" label="Scenes" value={String(project.frames.length)} />
+                    <DeliveryStat icon="color-palette-outline" label="Look" value={project.style} />
                   </View>
                 </GlassCard>
               ) : null}
-
-              {ready ? (
-                <View style={styles.quickSection}>
-                  <Mono color={darkMobile ? '#C8BCAF' : undefined}>QUICK CHANGES</Mono>
-                  <View style={styles.quickChips}>
-                    {['slower pacing', 'warmer light', 'tighter ending', 'more camera motion'].map((label) => (
-                      <Pressable
-                        key={label}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: quickChange === label }}
-                        onPress={() => {
-                          tap('light');
-                          setQuickChange((current) => current === label ? null : label);
-                        }}
-                        style={[
-                          styles.quickChip,
-                          darkMobile && styles.quickChipDark,
-                          quickChange === label && styles.quickChipSelected,
-                        ]}>
-                        <Text style={[
-                          styles.quickChipText,
-                          darkMobile && styles.quickChipTextDark,
-                          quickChange === label && styles.quickChipTextSelected,
-                        ]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={styles.actions}>
-                {failed ? (
-                  <Button
-                    label="Retry render"
-                    icon="refresh-outline"
-                    size="lg"
-                    loading={rendering}
-                    onPress={() => void renderVideo()}
-                  />
-                ) : ready ? (
-                  <>
-                    <Button
-                      label={quickChange ? `Make “${quickChange}” version` : 'Make another version'}
-                      icon="sparkles"
-                      size="lg"
-                      loading={rendering}
-                      onPress={() => void renderVideo()}
-                    />
-                    <Button
-                      label="Download 1080×1920"
-                      icon="download-outline"
-                      size="md"
-                      variant="secondary"
-                      disabled={!project.videoUri}
-                      onPress={() => void handleDownload()}
-                    />
-                  </>
-                ) : (
-                  <Button label={phaseLabel(phase)} size="lg" loading disabled onPress={() => {}} />
-                )}
-              </View>
-            </View>
-          </View>
-
-          {ready ? (
-            <GlassCard radius={theme.radius.lg}>
-              <View style={styles.deliveryRow}>
-                <DeliveryStat icon="time-outline" label="Duration" value={`${project.durationSec}s`} />
-                <DeliveryStat icon="resize-outline" label="Format" value="9:16" />
-                <DeliveryStat icon="images-outline" label="Scenes" value={String(project.frames.length)} />
-                <DeliveryStat icon="color-palette-outline" label="Look" value={project.style} />
-              </View>
-            </GlassCard>
-          ) : null}
+            </>
+          )}
         </Container>
       </ScrollView>
     </Screen>

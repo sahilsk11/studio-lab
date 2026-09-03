@@ -37,7 +37,7 @@ import {
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
-import { SignInGate, useRequiresSignIn } from '@/components/ui/SignInGate';
+import { useContinueAfterSignIn } from '@/components/ui/SignInGate';
 import { imageProgress } from '@/lib/project';
 import type { Frame, Project } from '@/types/project';
 
@@ -59,7 +59,11 @@ export default function ScenesReviewScreen() {
     removeItem,
   } = useProject();
   const { settings, tap } = useSettings();
-  const requiresSignIn = useRequiresSignIn();
+  const { authReady, requiresSignIn, continueOrSignIn } = useContinueAfterSignIn(() => {
+    tap('success');
+    router.push('/watch');
+  });
+  const needsSignIn = requiresSignIn && !settings.testMode;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditorTarget | null>(null);
 
@@ -115,14 +119,12 @@ export default function ScenesReviewScreen() {
           />
         ) : (
           <Button
-            label={requiresSignIn ? 'Sign in to generate video' : 'Generate video'}
-            icon={requiresSignIn ? 'log-in-outline' : 'play'}
+            label={needsSignIn ? 'Sign in to generate video' : 'Generate video'}
+            icon={needsSignIn ? 'log-in-outline' : 'play'}
             size="lg"
-            disabled={!allReady && !requiresSignIn}
-            onPress={() => {
-              tap('success');
-              router.push('/watch');
-            }}
+            loading={!authReady && !settings.testMode}
+            disabled={(!allReady && !needsSignIn) || (!authReady && !settings.testMode)}
+            onPress={continueOrSignIn}
           />
         )
       }>
@@ -149,13 +151,6 @@ export default function ScenesReviewScreen() {
           </View>
 
           {error ? <Callout variant="error" title="Scene rendering paused" message={error} /> : null}
-
-          {requiresSignIn && allReady ? (
-            <SignInGate
-              title="Sign in to render your video"
-              message="You can build the whole storyboard without an account. Video generation requires signing in so we can track usage."
-            />
-          ) : null}
 
           <View style={[styles.grid, { gap: GAP }]}>
             {frames.map((frame, index) => (

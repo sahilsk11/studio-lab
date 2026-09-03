@@ -143,6 +143,15 @@ function requireOwner(req: express.Request, res: express.Response): ProjectOwner
   return owner;
 }
 
+function requireSignedIn(req: express.Request, res: express.Response): boolean {
+  if (authOf(req).isAuthenticated) return true;
+  res.status(401).json({
+    error: 'sign_in_required',
+    message: 'Sign in to generate video',
+  });
+  return false;
+}
+
 function projectIdParam(req: express.Request): string {
   return z.string().uuid().parse(req.params.id);
 }
@@ -351,13 +360,7 @@ app.delete('/api/projects/:id/item', (req, res) => {
 });
 
 app.post('/api/projects/:id/video', async (req, res) => {
-  if (!authOf(req).isAuthenticated) {
-    res.status(401).json({
-      error: 'sign_in_required',
-      message: 'Sign in to generate video',
-    });
-    return;
-  }
+  if (!requireSignedIn(req, res)) return;
 
   req.setTimeout(VIDEO_TIMEOUT_MS * 2 + 60_000);
   res.setTimeout(VIDEO_TIMEOUT_MS * 2 + 60_000);

@@ -47,10 +47,7 @@ export function withMediaUrls(project: Project): Project {
 async function authHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
   const token = authTokenGetter ? await authTokenGetter() : null;
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-    return headers;
-  }
+  if (token) headers.Authorization = `Bearer ${token}`;
   const sessionId = anonymousSessionGetter ? await anonymousSessionGetter() : null;
   if (sessionId) headers['X-Anonymous-Session'] = sessionId;
   return headers;

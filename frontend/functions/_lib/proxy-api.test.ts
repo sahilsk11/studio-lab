@@ -67,6 +67,32 @@ describe('proxyApiRequest', () => {
     expect(headers.get('accept')).toBe('application/json');
   });
 
+  it('forwards the Clerk Authorization header and anonymous session to Fly', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await proxyApiRequest(
+      new Request('https://studiolab.ultron.sh/api/projects/abc/video', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          authorization: 'Bearer clerk-session',
+          'x-anonymous-session': 'anon-1',
+          'cf-access-jwt-assertion': 'access-jwt',
+        },
+      }),
+      {},
+    );
+
+    expect(response.status).toBe(200);
+    const call = fetchMock.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, init] = call as unknown as [URL, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(headers.get('authorization')).toBe('Bearer clerk-session');
+    expect(headers.get('x-anonymous-session')).toBe('anon-1');
+  });
+
   it('returns 401 when the browser has no Access token', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
