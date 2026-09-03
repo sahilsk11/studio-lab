@@ -13,6 +13,13 @@ export { Row, Section } from './Row';
 export { Container, CONTENT_MAX_WIDTH, Screen } from './Screen';
 export { StatusBadge } from './StatusBadge';
 export { StepRail } from './StepRail';
+export {
+  DESKTOP_BREAKPOINT,
+  SIDEBAR_INSET,
+  SIDEBAR_WIDTH,
+  StepSidebar,
+  useDesktopLayout,
+} from './StepSidebar';
 export { Toggle } from './Toggle';
 export {
   Body,

@@ -25,9 +25,11 @@ import {
   GlassCard,
   Mono,
   Screen,
+  SIDEBAR_INSET,
   StatusBadge,
-  StepRail,
+  StepSidebar,
   Title,
+  useDesktopLayout,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
@@ -41,7 +43,7 @@ const PAGE_PAD = theme.space.xl;
 export default function PlacesScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const desktop = width >= 900;
+  const desktop = useDesktopLayout();
   const {
     project,
     hydrated,
@@ -61,7 +63,7 @@ export default function PlacesScreen() {
 
   const contentWidth = Math.max(
     280,
-    Math.min(width - PAGE_PAD * 2, CONTENT_MAX_WIDTH) - (desktop ? 224 : 0),
+    Math.min(width - PAGE_PAD * 2, CONTENT_MAX_WIDTH) - (desktop ? SIDEBAR_INSET : 0),
   );
   const columns = contentWidth >= 940 ? 3 : contentWidth >= 680 ? 2 : 1;
   const cardWidth = (contentWidth - GAP * (columns - 1)) / columns;
@@ -135,14 +137,8 @@ export default function PlacesScreen() {
         )
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.stack, desktop && styles.stackDesktop]}>
-          <GlassCard
-            radius={theme.radius.md}
-            style={desktop ? styles.railCardDesktop : undefined}>
-            <View style={styles.railInner}>
-              <StepRail current="Places" orientation={desktop ? 'vertical' : 'horizontal'} />
-            </View>
-          </GlassCard>
+        <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
+          <StepSidebar current="Places" />
 
           <View style={styles.heading}>
             <Title>Where it happens</Title>
@@ -230,7 +226,7 @@ function PlaceCard({
       radius={theme.radius.md}
       tone={kept ? 'active' : 'raised'}
       style={[styles.placeCard, { width }]}
-      glowColor={kept ? theme.success : undefined}>
+      glowColor={kept ? theme.accent : undefined}>
       <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit ${scene.title}`}>
         <View style={styles.imagePair}>
           <PlaceImage uri={scene.imageUri} label="wide plate" />
@@ -321,16 +317,6 @@ const styles = StyleSheet.create({
     paddingBottom: theme.space.xxl,
   },
   stack: { gap: theme.space.xl },
-  stackDesktop: { paddingLeft: 224 },
-  railInner: { paddingHorizontal: theme.space.sm, paddingVertical: theme.space.md },
-  railCardDesktop: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 200,
-    borderRadius: 0,
-  },
   heading: { gap: theme.space.sm },
   subhead: { maxWidth: 560 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.space.sm, flexWrap: 'wrap' },

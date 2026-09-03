@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
@@ -21,58 +21,76 @@ export function StepRail({
   const { project } = useProject();
   const { tap } = useSettings();
   const currentIndex = STEPS.indexOf(current);
+  const vertical = orientation === 'vertical';
+
+  const items = STEPS.map((step, index) => {
+    const reachable = canNavigateToStep(project, step);
+    const isCurrent = step === current;
+    const isDone = index < currentIndex;
+    const isFuture = !isDone && !isCurrent;
+
+    return (
+      <Pressable
+        key={step}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isCurrent, disabled: !reachable }}
+        accessibilityLabel={`Step ${index + 1} of ${STEPS.length}: ${step}`}
+        disabled={!reachable || isCurrent}
+        onPress={() => {
+          tap('light');
+          router.push(stepRoute(step) as never);
+        }}
+        style={({ pressed }) => [
+          styles.item,
+          vertical ? styles.itemVertical : styles.itemHorizontal,
+          isCurrent && styles.current,
+          isCurrent && dark && styles.currentDark,
+          !reachable && isFuture && styles.itemFuture,
+          pressed && reachable && styles.pressed,
+        ]}>
+        <View
+          style={[
+            styles.dot,
+            dark && styles.dotDark,
+            isDone && styles.dotDone,
+            isCurrent && styles.dotCurrent,
+            isFuture && styles.dotFuture,
+            isFuture && dark && styles.dotFutureDark,
+          ]}
+        />
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.label,
+            dark && styles.labelDark,
+            isDone && styles.labelDone,
+            isDone && dark && styles.labelDoneDark,
+            isCurrent && styles.labelCurrent,
+            isFuture && styles.labelFuture,
+            isFuture && dark && styles.labelFutureDark,
+          ]}>
+          {step}
+        </Text>
+      </Pressable>
+    );
+  });
+
+  if (vertical) {
+    return (
+      <View style={[styles.rail, styles.railVertical]} accessibilityRole="tablist">
+        {items}
+      </View>
+    );
+  }
 
   return (
-    <View
-      style={[styles.rail, orientation === 'vertical' && styles.railVertical]}
-      accessibilityRole="tablist">
-      {STEPS.map((step, index) => {
-        const reachable = canNavigateToStep(project, step);
-        const isCurrent = step === current;
-        const isDone = index < currentIndex;
-
-        return (
-          <Pressable
-            key={step}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: isCurrent, disabled: !reachable }}
-            accessibilityLabel={`Step ${index + 1} of ${STEPS.length}: ${step}`}
-            disabled={!reachable || isCurrent}
-            onPress={() => {
-              tap('light');
-              router.push(stepRoute(step) as never);
-            }}
-            style={({ pressed }) => [
-              styles.item,
-              orientation === 'vertical' && styles.itemVertical,
-              isCurrent && styles.current,
-              isCurrent && dark && styles.currentDark,
-              !reachable && styles.unreachable,
-              pressed && styles.pressed,
-            ]}>
-            <View
-              style={[
-                styles.dot,
-                dark && styles.dotDark,
-                isDone && styles.dotDone,
-                isCurrent && styles.dotCurrent,
-              ]}
-            />
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.label,
-                dark && styles.labelDark,
-                isDone && styles.labelDone,
-                isDone && dark && styles.labelDoneDark,
-                isCurrent && styles.labelCurrent,
-              ]}>
-              {step}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      accessibilityRole="tablist"
+      contentContainerStyle={styles.railHorizontal}>
+      {items}
+    </ScrollView>
   );
 }
 
@@ -88,31 +106,40 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: 3,
   },
+  railHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
   item: {
-    minWidth: 0,
-    minHeight: 43,
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingHorizontal: 2,
     borderRadius: theme.radius.sm,
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
+  },
+  itemHorizontal: {
+    minWidth: 74,
+    minHeight: 43,
+    paddingHorizontal: 8,
   },
   itemVertical: {
     width: '100%',
     minHeight: 38,
-    flex: 0,
     flexDirection: 'row',
     justifyContent: 'flex-start',
     paddingHorizontal: 10,
     gap: 10,
   },
+  itemFuture: {
+    opacity: 1,
+  },
   current: {
     backgroundColor: theme.accentSoft,
   },
   currentDark: { backgroundColor: 'rgba(217,91,56,0.2)' },
-  unreachable: { opacity: 0.48 },
   pressed: { opacity: 0.64 },
   dot: {
     width: 7,
@@ -132,9 +159,17 @@ const styles = StyleSheet.create({
     borderColor: theme.accent,
     backgroundColor: theme.accent,
   },
+  dotFuture: {
+    backgroundColor: 'transparent',
+    borderColor: theme.borderStrong,
+  },
+  dotFutureDark: {
+    backgroundColor: 'transparent',
+    borderColor: '#7D746A',
+  },
   label: {
     fontFamily: theme.font.sans,
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '500',
     color: theme.textTertiary,
   },
@@ -145,4 +180,6 @@ const styles = StyleSheet.create({
     color: theme.accentDark,
     fontWeight: '700',
   },
+  labelFuture: { color: theme.textQuaternary },
+  labelFutureDark: { color: '#7D746A' },
 });
