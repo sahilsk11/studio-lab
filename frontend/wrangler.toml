@@ -6,3 +6,4 @@ compatibility_date = "2026-09-02"
 # the Pages Function forwards from Cf-Access-Jwt-Assertion / CF_Authorization.
 [vars]
 API_ORIGIN = "https://studio-lab.fly.dev"
+CANONICAL_HOST = "studiolab.ultron.sh"
