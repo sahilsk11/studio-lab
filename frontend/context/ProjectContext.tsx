@@ -80,6 +80,7 @@ export type ProjectContextValue = {
   removeItem: (kind: ImageKind, id: string) => Promise<void>;
   resetProject: () => Promise<void>;
   refreshProject: () => Promise<void>;
+  reloadAfterAuth: () => Promise<void>;
   generateVideo: () => Promise<void>;
 };
 
@@ -650,6 +651,25 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const reloadAfterAuth = useCallback(async () => {
+    if (testModeRef.current) return;
+    setError(null);
+    try {
+      const named = await listProjects();
+      setProjects(named);
+      const currentId = activeIdRef.current;
+      const preferred = named.find((item) => item.id === currentId) ?? named[0];
+      if (preferred) {
+        const remote = await fetchProject(preferred.id);
+        persistReady.current = true;
+        setProject(remote);
+        rememberActive(remote.id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reload projects after sign-in');
+    }
+  }, [rememberActive]);
+
   const value = useMemo<ProjectContextValue>(
     () => ({
       project,
@@ -787,6 +807,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       updateItem: updateItemFields,
       removeItem,
       refreshProject,
+      reloadAfterAuth,
 
       generateVideo: async () => {
         const clipTotal = projectRef.current.durationSec > 30 ? 2 : 1;
@@ -859,6 +880,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       updateItemFields,
       removeItem,
       refreshProject,
+      reloadAfterAuth,
     ],
   );
 

@@ -123,6 +123,86 @@ export function upsertAccessUser(identity: { email?: string; sub?: string }): Us
   };
 }
 
+export function upsertClerkUser(identity: {
+  sub: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+}): User {
+  const email = blankToNull(identity.email);
+  const externalId = blankToNull(identity.sub);
+  const firstName = blankToNull(identity.firstName);
+  const lastName = blankToNull(identity.lastName);
+  assertIdentifier({ email, externalId });
+
+  const db = getDb();
+  const byExternal = db
+    .prepare('SELECT * FROM users WHERE external_id = ?')
+    .get(externalId) as UserRow | undefined;
+  if (byExternal) {
+    const updates: string[] = [];
+    const values: Array<string | null> = [];
+    if (email && !byExternal.email) {
+      updates.push('email = ?');
+      values.push(email);
+    }
+    if (firstName && !byExternal.first_name) {
+      updates.push('first_name = ?');
+      values.push(firstName);
+    }
+    if (lastName && !byExternal.last_name) {
+      updates.push('last_name = ?');
+      values.push(lastName);
+    }
+    if (updates.length) {
+      updates.push('updated_at = ?');
+      values.push(now(), byExternal.id);
+      db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      return mapUser({
+        ...byExternal,
+        email: email ?? byExternal.email,
+        first_name: firstName ?? byExternal.first_name,
+        last_name: lastName ?? byExternal.last_name,
+      });
+    }
+    return mapUser(byExternal);
+  }
+
+  const byEmail = email
+    ? (db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined)
+    : undefined;
+  if (byEmail) {
+    db.prepare('UPDATE users SET external_id = ?, first_name = COALESCE(first_name, ?), last_name = COALESCE(last_name, ?), updated_at = ? WHERE id = ?').run(
+      externalId,
+      firstName,
+      lastName,
+      now(),
+      byEmail.id,
+    );
+    return mapUser({
+      ...byEmail,
+      external_id: externalId,
+      first_name: byEmail.first_name ?? firstName,
+      last_name: byEmail.last_name ?? lastName,
+    });
+  }
+
+  const ts = now();
+  const id = randomUUID();
+  db.prepare(
+    `INSERT INTO users (id, first_name, last_name, email, phone, external_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
+  ).run(id, firstName, lastName, email, externalId, ts, ts);
+  return {
+    id,
+    firstName,
+    lastName,
+    email,
+    phone: null,
+    externalId,
+  };
+}
+
 export function resolveRequestUser(identity: { email?: string; sub?: string } | null): User {
   if (!identity) return ensureLocalUser();
   return upsertAccessUser(identity);

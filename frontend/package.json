@@ -3,6 +3,8 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.9",
+    "@clerk/expo": "^4.6.4",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "expo": "~57.0.18",

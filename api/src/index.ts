@@ -6,6 +6,13 @@ import { z } from 'zod';
 import { runCast, runCreateProject, runFrames, runImage, runScenes, runVideo } from './actions.js';
 import { MEDIA_DIR, PORT, VIDEO_TIMEOUT_MS } from './config.js';
 import {
+  anonymousSessionFromHeaders,
+  bearerFromHeaders,
+  ClerkAuthError,
+  createClerkVerifier,
+  loadClerkConfig,
+} from './clerk-auth.js';
+import {
   CloudflareAccessError,
   createCloudflareAccessVerifier,
   loadCloudflareAccessConfig,
@@ -13,23 +20,33 @@ import {
 import {
   StoreError,
   assertOwnedProject,
-  claimOrphanedProjects,
+  claimAnonymousProjects,
   deleteItem,
   listNamedProjects,
   loadOwnedProject,
   patchItem,
   patchProject,
   resetProject,
+  type ProjectOwner,
 } from './store.js';
 import type { ImageKind } from './types.js';
-import { resolveRequestUser, type User } from './users.js';
+import { ensureLocalUser, resolveRequestUser, upsertClerkUser, type User } from './users.js';
 
-type AuthedRequest = express.Request & { user: User };
+type RequestAuth = {
+  user: User | null;
+  owner: ProjectOwner | null;
+  isAuthenticated: boolean;
+};
+
+type AuthedRequest = express.Request & { auth: RequestAuth };
 
 const cloudflareAccessConfig = loadCloudflareAccessConfig(process.env);
 const cloudflareAccess = cloudflareAccessConfig
   ? createCloudflareAccessVerifier(cloudflareAccessConfig)
   : null;
+
+const clerkConfig = loadClerkConfig(process.env);
+const clerkAuth = clerkConfig ? createClerkVerifier(clerkConfig) : null;
 
 const corsOrigin = process.env.CORS_ALLOWED_ORIGIN?.trim();
 const app = express();
@@ -37,55 +54,110 @@ app.use(corsOrigin ? cors({ origin: corsOrigin }) : cors());
 app.use(express.json({ limit: '2mb' }));
 
 function healthPayload(_req: express.Request, res: express.Response) {
-  res.json({ ok: true, hasKey: Boolean(process.env.OPENROUTER_API_KEY) });
+  res.json({
+    ok: true,
+    hasKey: Boolean(process.env.OPENROUTER_API_KEY),
+    auth: clerkAuth ? 'clerk' : 'local',
+  });
 }
 
 app.get('/health', healthPayload);
 app.get('/healthz', healthPayload);
 
-function attachUser(req: express.Request, identity: { email?: string; sub?: string } | null) {
-  const user = resolveRequestUser(identity);
-  claimOrphanedProjects(user.id);
-  (req as AuthedRequest).user = user;
+async function resolveAuth(
+  headers: Record<string, string | string[] | undefined>,
+  accessIdentity: { email?: string; sub?: string } | null,
+): Promise<RequestAuth> {
+  const anonymousSession = anonymousSessionFromHeaders(headers);
+
+  if (clerkAuth) {
+    try {
+      const identity = await clerkAuth.verify(bearerFromHeaders(headers));
+      const user = upsertClerkUser(identity);
+      if (anonymousSession) claimAnonymousProjects(user.id, anonymousSession);
+      return {
+        user,
+        owner: { kind: 'user', userId: user.id },
+        isAuthenticated: true,
+      };
+    } catch (error) {
+      if (!(error instanceof ClerkAuthError)) throw error;
+    }
+
+    if (anonymousSession) {
+      return { user: null, owner: { kind: 'anonymous', sessionId: anonymousSession }, isAuthenticated: false };
+    }
+
+    return { user: null, owner: null, isAuthenticated: false };
+  }
+
+  if (accessIdentity) {
+    const user = resolveRequestUser(accessIdentity);
+    return { user, owner: { kind: 'user', userId: user.id }, isAuthenticated: true };
+  }
+
+  const user = ensureLocalUser();
+  return { user, owner: { kind: 'user', userId: user.id }, isAuthenticated: true };
 }
 
 app.use(async (req, res, next) => {
-  if (!cloudflareAccess) {
-    attachUser(req, null);
-    next();
-    return;
+  let accessIdentity: { email?: string; sub?: string } | null = null;
+
+  if (cloudflareAccess) {
+    try {
+      const identity = await cloudflareAccess.verify(req.headers);
+      accessIdentity = {
+        email: identity.email,
+        sub: typeof identity.sub === 'string' ? identity.sub : undefined,
+      };
+    } catch (error) {
+      if (error instanceof CloudflareAccessError) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      next(error);
+      return;
+    }
   }
 
   try {
-    const identity = await cloudflareAccess.verify(req.headers);
-    attachUser(req, {
-      email: identity.email,
-      sub: typeof identity.sub === 'string' ? identity.sub : undefined,
-    });
+    (req as AuthedRequest).auth = await resolveAuth(req.headers, accessIdentity);
     next();
   } catch (error) {
-    if (error instanceof CloudflareAccessError) {
-      res.status(401).json({ error: 'unauthorized' });
-      return;
-    }
     next(error);
   }
 });
 
 app.use('/media', express.static(MEDIA_DIR, { maxAge: '1h', fallthrough: false }));
 
-function userOf(req: express.Request): User {
-  return (req as AuthedRequest).user;
+function authOf(req: express.Request): RequestAuth {
+  return (req as AuthedRequest).auth;
+}
+
+function requireOwner(req: express.Request, res: express.Response): ProjectOwner | null {
+  const owner = authOf(req).owner;
+  if (!owner) {
+    res.status(401).json({ error: 'session_required', message: 'Anonymous session required' });
+    return null;
+  }
+  return owner;
 }
 
 function projectIdParam(req: express.Request): string {
   return z.string().uuid().parse(req.params.id);
 }
 
-function ownedId(req: express.Request): string {
-  const id = projectIdParam(req);
-  assertOwnedProject(id, userOf(req).id);
-  return id;
+function ownedId(req: express.Request, res: express.Response): string | null {
+  const owner = requireOwner(req, res);
+  if (!owner) return null;
+  try {
+    const id = projectIdParam(req);
+    assertOwnedProject(id, owner);
+    return id;
+  } catch (err) {
+    sendError(res, err, 'Project not found');
+    return null;
+  }
 }
 
 function sendError(res: express.Response, err: unknown, fallback: string) {
@@ -101,9 +173,26 @@ function sendError(res: express.Response, err: unknown, fallback: string) {
   res.status(500).json({ error: err instanceof Error ? err.message : fallback });
 }
 
+app.get('/api/me', (req, res) => {
+  const { user, isAuthenticated } = authOf(req);
+  res.json({
+    authenticated: isAuthenticated,
+    user: user
+      ? {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+        }
+      : null,
+  });
+});
+
 app.get('/api/projects', (req, res) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   try {
-    res.json({ projects: listNamedProjects(userOf(req).id) });
+    res.json({ projects: listNamedProjects(owner) });
   } catch (err) {
     sendError(res, err, 'List failed');
   }
@@ -116,9 +205,11 @@ const ideaSchema = z.object({
 });
 
 app.post('/api/projects', async (req, res) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   try {
     const input = ideaSchema.parse(req.body);
-    const project = await runCreateProject({ userId: userOf(req).id, ...input });
+    const project = await runCreateProject({ owner, ...input });
     res.json({ project });
   } catch (err) {
     sendError(res, err, 'Create failed');
@@ -126,8 +217,11 @@ app.post('/api/projects', async (req, res) => {
 });
 
 app.get('/api/projects/:id', (req, res) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   try {
-    res.json({ project: loadOwnedProject(ownedId(req), userOf(req).id) });
+    const id = projectIdParam(req);
+    res.json({ project: loadOwnedProject(id, owner) });
   } catch (err) {
     sendError(res, err, 'Load failed');
   }
@@ -140,8 +234,9 @@ const patchSchema = z.object({
 });
 
 app.patch('/api/projects/:id', (req, res) => {
+  const id = ownedId(req, res);
+  if (!id) return;
   try {
-    const id = ownedId(req);
     const input = patchSchema.parse(req.body);
     res.json({ project: patchProject(id, input) });
   } catch (err) {
@@ -155,8 +250,9 @@ const resetSchema = z.object({
 });
 
 app.post('/api/projects/:id/reset', (req, res) => {
+  const id = ownedId(req, res);
+  if (!id) return;
   try {
-    const id = ownedId(req);
     const input = resetSchema.parse(req.body ?? {});
     res.json({ project: resetProject(id, input) });
   } catch (err) {
@@ -165,8 +261,9 @@ app.post('/api/projects/:id/reset', (req, res) => {
 });
 
 app.post('/api/projects/:id/cast', async (req, res) => {
+  const id = ownedId(req, res);
+  if (!id) return;
   try {
-    const id = ownedId(req);
     const input = ideaSchema.parse(req.body);
     const project = await runCast(id, input);
     res.json({ project });
@@ -176,8 +273,10 @@ app.post('/api/projects/:id/cast', async (req, res) => {
 });
 
 app.post('/api/projects/:id/scenes', async (req, res) => {
+  const id = ownedId(req, res);
+  if (!id) return;
   try {
-    const project = await runScenes(ownedId(req));
+    const project = await runScenes(id);
     res.json({ project });
   } catch (err) {
     sendError(res, err, 'Scenes failed');
@@ -185,8 +284,10 @@ app.post('/api/projects/:id/scenes', async (req, res) => {
 });
 
 app.post('/api/projects/:id/frames', async (req, res) => {
+  const id = ownedId(req, res);
+  if (!id) return;
   try {
-    const project = await runFrames(ownedId(req));
+    const project = await runFrames(id);
     res.json({ project });
   } catch (err) {
     sendError(res, err, 'Frames failed');
@@ -199,8 +300,9 @@ const imageSchema = z.object({
 });
 
 app.post('/api/projects/:id/images', async (req, res) => {
+  const projectId = ownedId(req, res);
+  if (!projectId) return;
   try {
-    const projectId = ownedId(req);
     const input = imageSchema.parse(req.body);
     const project = await runImage(projectId, input.kind as ImageKind, input.id);
     res.json({ project });
@@ -221,8 +323,9 @@ const itemPatchSchema = z.object({
 });
 
 app.patch('/api/projects/:id/item', (req, res) => {
+  const projectId = ownedId(req, res);
+  if (!projectId) return;
   try {
-    const projectId = ownedId(req);
     const input = itemPatchSchema.parse(req.body);
     const { kind, id, ...patch } = input;
     res.json({ project: patchItem(projectId, kind as ImageKind, id, patch) });
@@ -232,8 +335,9 @@ app.patch('/api/projects/:id/item', (req, res) => {
 });
 
 app.delete('/api/projects/:id/item', (req, res) => {
+  const projectId = ownedId(req, res);
+  if (!projectId) return;
   try {
-    const projectId = ownedId(req);
     const input = z
       .object({
         kind: z.enum(['person', 'thing', 'scene', 'frame']),
@@ -247,10 +351,20 @@ app.delete('/api/projects/:id/item', (req, res) => {
 });
 
 app.post('/api/projects/:id/video', async (req, res) => {
+  if (!authOf(req).isAuthenticated) {
+    res.status(401).json({
+      error: 'sign_in_required',
+      message: 'Sign in to generate video',
+    });
+    return;
+  }
+
   req.setTimeout(VIDEO_TIMEOUT_MS * 2 + 60_000);
   res.setTimeout(VIDEO_TIMEOUT_MS * 2 + 60_000);
+  const id = ownedId(req, res);
+  if (!id) return;
   try {
-    const project = await runVideo(ownedId(req));
+    const project = await runVideo(id);
     res.json({ project });
   } catch (err) {
     sendError(res, err, 'Video failed');

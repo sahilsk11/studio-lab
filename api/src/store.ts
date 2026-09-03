@@ -66,7 +66,8 @@ function imageFields(row: ImageRow) {
 
 type ProjectRow = {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  anonymous_session_id: string | null;
   title: string;
   idea: string;
   style: string;
@@ -93,32 +94,67 @@ function projectRow(projectId: string): ProjectRow {
   return row;
 }
 
-export function assertOwnedProject(projectId: string, userId: string): ProjectRow {
+export type ProjectOwner =
+  | { kind: 'user'; userId: string }
+  | { kind: 'anonymous'; sessionId: string };
+
+function ownerMatches(row: ProjectRow, owner: ProjectOwner): boolean {
+  if (owner.kind === 'user') return row.user_id === owner.userId;
+  return row.user_id === null && row.anonymous_session_id === owner.sessionId;
+}
+
+export function assertOwnedProject(projectId: string, owner: ProjectOwner): ProjectRow {
   const row = projectRow(projectId);
-  if (row.user_id !== userId) throw new StoreError(404, 'Project not found');
+  if (!ownerMatches(row, owner)) throw new StoreError(404, 'Project not found');
   return row;
+}
+
+export function claimAnonymousProjects(userId: string, sessionId: string): void {
+  getDb()
+    .prepare(
+      `UPDATE projects SET user_id = ?, anonymous_session_id = NULL, updated_at = ?
+       WHERE user_id IS NULL AND anonymous_session_id = ?`,
+    )
+    .run(userId, now(), sessionId);
 }
 
 export function claimOrphanedProjects(userId: string): void {
   getDb().prepare('UPDATE projects SET user_id = ? WHERE user_id IS NULL').run(userId);
 }
 
-export function listNamedProjects(userId: string): ProjectSummary[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT id, title, idea, style, duration_sec, updated_at
-       FROM projects
-       WHERE user_id = ? AND TRIM(title) != ''
-       ORDER BY updated_at DESC`,
-    )
-    .all(userId) as Array<{
-    id: string;
-    title: string;
-    idea: string;
-    style: string;
-    duration_sec: number;
-    updated_at: string;
-  }>;
+export function listNamedProjects(owner: ProjectOwner): ProjectSummary[] {
+  const rows =
+    owner.kind === 'user'
+      ? (getDb()
+          .prepare(
+            `SELECT id, title, idea, style, duration_sec, updated_at
+             FROM projects
+             WHERE user_id = ? AND TRIM(title) != ''
+             ORDER BY updated_at DESC`,
+          )
+          .all(owner.userId) as Array<{
+          id: string;
+          title: string;
+          idea: string;
+          style: string;
+          duration_sec: number;
+          updated_at: string;
+        }>)
+      : (getDb()
+          .prepare(
+            `SELECT id, title, idea, style, duration_sec, updated_at
+             FROM projects
+             WHERE user_id IS NULL AND anonymous_session_id = ? AND TRIM(title) != ''
+             ORDER BY updated_at DESC`,
+          )
+          .all(owner.sessionId) as Array<{
+          id: string;
+          title: string;
+          idea: string;
+          style: string;
+          duration_sec: number;
+          updated_at: string;
+        }>);
 
   return rows.map((row) => ({
     id: row.id,
@@ -131,7 +167,7 @@ export function listNamedProjects(userId: string): ProjectSummary[] {
 }
 
 export function createProject(input: {
-  userId: string;
+  owner: ProjectOwner;
   title: string;
   idea: string;
   style: string;
@@ -143,14 +179,17 @@ export function createProject(input: {
 
   const id = randomUUID();
   const ts = now();
+  const userId = input.owner.kind === 'user' ? input.owner.userId : null;
+  const sessionId = input.owner.kind === 'anonymous' ? input.owner.sessionId : null;
   getDb()
     .prepare(
-      `INSERT INTO projects (id, user_id, title, idea, style, style_notes, duration_sec, video_ready, total_cost, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, '', ?, 0, ?, ?, ?)`,
+      `INSERT INTO projects (id, user_id, anonymous_session_id, title, idea, style, style_notes, duration_sec, video_ready, total_cost, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, '', ?, 0, ?, ?, ?)`,
     )
     .run(
       id,
-      input.userId,
+      userId,
+      sessionId,
       title,
       input.idea,
       input.style,
@@ -199,7 +238,7 @@ export function loadProject(projectId: string): Project {
 
   return {
     id: project.id,
-    userId: project.user_id,
+    userId: project.user_id ?? '',
     title: project.title,
     idea: project.idea,
     style: project.style,
@@ -249,8 +288,8 @@ export function loadProject(projectId: string): Project {
   };
 }
 
-export function loadOwnedProject(projectId: string, userId: string): Project {
-  assertOwnedProject(projectId, userId);
+export function loadOwnedProject(projectId: string, owner: ProjectOwner): Project {
+  assertOwnedProject(projectId, owner);
   return loadProject(projectId);
 }
 

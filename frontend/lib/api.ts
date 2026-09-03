@@ -5,6 +5,8 @@ export const DEFAULT_API_URL =
   configuredApiUrl !== undefined ? configuredApiUrl : 'http://localhost:3001';
 
 let apiBaseUrl = DEFAULT_API_URL;
+let authTokenGetter: (() => Promise<string | null>) | null = null;
+let anonymousSessionGetter: (() => Promise<string | null>) | null = null;
 
 export function setApiBaseUrl(url: string): void {
   apiBaseUrl = url.trim().replace(/\/+$/, '') || DEFAULT_API_URL;
@@ -12,6 +14,14 @@ export function setApiBaseUrl(url: string): void {
 
 export function getApiBaseUrl(): string {
   return apiBaseUrl;
+}
+
+export function setAuthTokenGetter(getter: (() => Promise<string | null>) | null): void {
+  authTokenGetter = getter;
+}
+
+export function setAnonymousSessionGetter(getter: (() => Promise<string | null>) | null): void {
+  anonymousSessionGetter = getter;
 }
 
 export function resolveMediaUrl(uri?: string): string | undefined {
@@ -34,15 +44,38 @@ export function withMediaUrls(project: Project): Project {
   };
 }
 
+async function authHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {};
+  const token = authTokenGetter ? await authTokenGetter() : null;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    return headers;
+  }
+  const sessionId = anonymousSessionGetter ? await anonymousSessionGetter() : null;
+  if (sessionId) headers['X-Anonymous-Session'] = sessionId;
+  return headers;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers = await authHeaders();
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+
   const res = await fetch(`${apiBaseUrl}${path}`, {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers: Object.keys(headers).length ? headers : undefined,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+  if (!res.ok) {
+    const err = new Error(data.error ?? data.message ?? `Request failed (${res.status})`) as Error & {
+      code?: string;
+      status?: number;
+    };
+    err.code = data.error;
+    err.status = res.status;
+    throw err;
+  }
   return data as T;
 }
 

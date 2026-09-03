@@ -22,6 +22,7 @@ import {
   replaceCast,
   replaceFrames,
   replaceScenes,
+  type ProjectOwner,
 } from './store.js';
 import type { Frame, ImageKind, Person, Project, Scene, Thing } from './types.js';
 
@@ -127,7 +128,7 @@ export function fallbackTitle(idea: string): string {
 }
 
 export async function runCreateProject(input: {
-  userId: string;
+  owner: ProjectOwner;
   idea: string;
   style: string;
   durationSec: number;
@@ -143,7 +144,7 @@ export async function runCreateProject(input: {
     // No key, or the model failed — still create a visible named project.
   }
   return createProject({
-    userId: input.userId,
+    owner: input.owner,
     title,
     idea: input.idea,
     style: input.style,

@@ -157,6 +157,12 @@ function migrate(database: DatabaseSync): void {
   if (!have.has('user_id')) {
     database.exec('ALTER TABLE projects ADD COLUMN user_id TEXT');
   }
+  if (!have.has('anonymous_session_id')) {
+    database.exec('ALTER TABLE projects ADD COLUMN anonymous_session_id TEXT');
+  }
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS projects_anonymous_session_idx ON projects(anonymous_session_id) WHERE anonymous_session_id IS NOT NULL',
+  );
 }
 
 function rekeyLegacyCurrent(database: DatabaseSync): void {

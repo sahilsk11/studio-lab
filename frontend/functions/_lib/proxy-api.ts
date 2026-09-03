@@ -38,6 +38,10 @@ function forwardedHeaders(request: Request, jwt: string): Headers {
   if (contentType) headers.set('content-type', contentType);
   const range = request.headers.get('range');
   if (range) headers.set('range', range);
+  const authorization = request.headers.get('authorization');
+  if (authorization) headers.set('authorization', authorization);
+  const anonymousSession = request.headers.get('x-anonymous-session');
+  if (anonymousSession) headers.set('x-anonymous-session', anonymousSession);
   headers.set('cf-access-jwt-assertion', jwt);
   return headers;
 }

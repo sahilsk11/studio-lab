@@ -7,6 +7,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { IconButton } from './Button';
 import { Container } from './Screen';
 import { ProjectPicker } from './ProjectPicker';
+import { AuthControls } from './AuthControls';
 
 export function BrandMark({ size = 20 }: { size?: number }) {
   return (
@@ -76,6 +77,7 @@ export function AppHeader({
           ) : null}
 
           {right}
+          <AuthControls />
           {!right && showSettings ? (
             <IconButton
               icon="options-outline"

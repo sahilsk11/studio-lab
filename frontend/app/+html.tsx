@@ -39,6 +39,12 @@ const rootStyles = `
 html, body {
   background-color: #FBF8EF;
   margin: 0;
+  font-family: "Bricolage Grotesque", ui-rounded, "Avenir Next", system-ui, -apple-system, sans-serif;
+}
+
+/* Clerk modals inherit from body; reinforce on their root nodes. */
+[class*="cl-"] {
+  font-family: "Bricolage Grotesque", ui-rounded, "Avenir Next", system-ui, -apple-system, sans-serif;
 }
 
 body {

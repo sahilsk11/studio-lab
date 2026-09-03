@@ -32,6 +32,7 @@ import {
   Title,
   useDesktopLayout,
 } from '@/components/ui';
+import { SignInGate, useRequiresSignIn } from '@/components/ui/SignInGate';
 import { fill, theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -54,6 +55,7 @@ export default function WatchScreen() {
   const { width } = useWindowDimensions();
   const { project, hydrated, testMode, error, generateVideo, refreshProject } = useProject();
   const { tap } = useSettings();
+  const requiresSignIn = useRequiresSignIn();
   const [rendering, setRendering] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [quickChange, setQuickChange] = useState<string | null>(null);
@@ -72,14 +74,14 @@ export default function WatchScreen() {
   const darkMobile = !isWide;
 
   useEffect(() => {
-    if (!hydrated || ready || activePhase || failed || started.current) return;
+    if (!hydrated || ready || activePhase || failed || started.current || requiresSignIn) return;
     if (project.frames.length === 0) {
       router.replace('/scenes');
       return;
     }
     started.current = true;
     void renderVideo();
-  }, [hydrated, ready, activePhase, failed, project.frames.length, router]);
+  }, [hydrated, ready, activePhase, failed, project.frames.length, requiresSignIn, router]);
 
   useEffect(() => {
     if ((!rendering && !activePhase) || testMode) return;
@@ -162,6 +164,13 @@ export default function WatchScreen() {
               variant="error"
               title="The render stopped"
               message={project.videoError || error || 'The video could not be completed.'}
+            />
+          ) : null}
+
+          {requiresSignIn && !ready && !activePhase ? (
+            <SignInGate
+              title="Sign in to generate your video"
+              message="Your storyboard is ready. Sign in to start the final render — your project will be saved to your account."
             />
           ) : null}
 
