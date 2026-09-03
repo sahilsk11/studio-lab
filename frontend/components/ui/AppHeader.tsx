@@ -6,6 +6,7 @@ import { theme } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { IconButton } from './Button';
 import { Container } from './Screen';
+import { ProjectPicker } from './ProjectPicker';
 
 export function BrandMark({ size = 20 }: { size?: number }) {
   return (
@@ -24,12 +25,14 @@ export function AppHeader({
   onBack,
   right,
   showSettings = true,
+  showProjectPicker = true,
   dark = false,
 }: {
   title?: string;
   onBack?: () => void;
   right?: React.ReactNode;
   showSettings?: boolean;
+  showProjectPicker?: boolean;
   dark?: boolean;
 }) {
   const router = useRouter();
@@ -54,6 +57,7 @@ export function AppHeader({
           <Text numberOfLines={1} style={[styles.wordmark, dark && styles.wordmarkDark]}>
             {title ?? 'Reel'}
           </Text>
+          {showProjectPicker ? <ProjectPicker /> : null}
         </View>
 
         <View style={styles.right}>
@@ -95,6 +99,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.space.xl,
     paddingVertical: 10,
     gap: theme.space.md,
+    overflow: 'visible',
+    zIndex: 20,
   },
   barDark: { backgroundColor: '#302C27' },
   left: {
@@ -117,7 +123,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.32)',
   },
   wordmark: {
-    flexShrink: 1,
+    flexShrink: 0,
     fontFamily: theme.font.sans,
     fontSize: 14.5,
     lineHeight: 20,

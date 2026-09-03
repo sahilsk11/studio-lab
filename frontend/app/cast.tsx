@@ -131,7 +131,7 @@ export default function CastScreen() {
     <Screen
       header={
         <AppHeader
-          title={project.title || 'Cast'}
+          title="Cast"
           onBack={() => router.push('/interview')}
           right={
             pending > 0 ? (

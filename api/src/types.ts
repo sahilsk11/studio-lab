@@ -54,8 +54,18 @@ export type Frame = ImageFields & {
   camera: string;
 };
 
+export type ProjectSummary = {
+  id: string;
+  title: string;
+  idea: string;
+  style: string;
+  durationSec: number;
+  updatedAt: string;
+};
+
 export type Project = {
   id: string;
+  userId: string;
   title: string;
   idea: string;
   style: string;

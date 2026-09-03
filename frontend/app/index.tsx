@@ -39,9 +39,11 @@ export default function IdeaScreen() {
     setDuration,
     generateCast,
     generateAllCastImages,
+    startProject,
   } = useProject();
   const { settings, tap } = useSettings();
   const [skipping, setSkipping] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   const compact = width < 620;
   const canStart = project.idea.trim().length >= 12;
@@ -51,6 +53,20 @@ export default function IdeaScreen() {
       setStyle(STYLES[0]);
     }
   }, [hydrated, project.style, setStyle]);
+
+  async function begin() {
+    if (!canStart || starting || skipping) return;
+    setStarting(true);
+    try {
+      await startProject();
+      tap('success');
+      router.push('/interview' as never);
+    } catch {
+      // Error is already on project context.
+    } finally {
+      setStarting(false);
+    }
+  }
 
   async function skipInterview() {
     if (!canStart || skipping) return;
@@ -110,9 +126,11 @@ export default function IdeaScreen() {
                     Platform.OS === 'web' &&
                     keyEvent.key === 'Enter' &&
                     (keyEvent.metaKey || keyEvent.ctrlKey) &&
-                    canStart
+                    canStart &&
+                    !starting &&
+                    !skipping
                   ) {
-                    router.push('/interview');
+                    void begin();
                   }
                 }}
                 placeholder="A courier is late for a delivery and takes a shortcut off a balcony…"
@@ -208,15 +226,16 @@ export default function IdeaScreen() {
                   label="Start"
                   size="lg"
                   inline={!compact}
-                  disabled={!canStart || skipping}
-                  onPress={() => router.push('/interview')}
+                  disabled={!canStart || skipping || starting}
+                  loading={starting}
+                  onPress={() => void begin()}
                 />
                 {!compact ? <Text style={styles.actionHint}>4 questions, ~30 seconds</Text> : null}
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !canStart || skipping, busy: skipping }}
-                disabled={!canStart || skipping}
+                accessibilityState={{ disabled: !canStart || skipping || starting, busy: skipping }}
+                disabled={!canStart || skipping || starting}
                 onPress={() => void skipInterview()}
                 style={({ pressed }) => [styles.skip, pressed && styles.pressed]}>
                 {skipping ? (

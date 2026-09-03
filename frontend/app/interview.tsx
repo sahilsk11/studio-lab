@@ -154,7 +154,7 @@ export default function InterviewScreen() {
     <Screen
       header={
         <AppHeader
-          title={project.title || 'Your reel'}
+          title={project.title || 'Interview'}
           onBack={() => router.push('/')}
         />
       }

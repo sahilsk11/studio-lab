@@ -1,4 +1,5 @@
 export { AppHeader, BrandMark } from './AppHeader';
+export { ProjectPicker } from './ProjectPicker';
 export { Backdrop } from './Backdrop';
 export { Button, IconButton } from './Button';
 export { Callout } from './Callout';

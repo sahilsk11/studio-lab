@@ -8,7 +8,6 @@ export const DB_PATH = path.join(DATA_DIR, 'studio-lab.db');
 export const MEDIA_DIR = path.join(DATA_DIR, 'media');
 
 export const PORT = Number(process.env.PORT ?? 3001);
-export const PROJECT_ID = 'current';
 
 export const DEFAULT_IDEA =
   'A barista discovers their latte art comes alive at midnight and starts a tiny revolution in the coffee shop.';

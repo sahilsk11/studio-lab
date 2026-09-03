@@ -110,7 +110,7 @@ CI builds from `frontend/` with `EXPO_PUBLIC_API_URL= npm run export:web` and de
 
 - `GET https://studiolab.ultron.sh/health` → `{"ok":true,...}` (via Pages proxy, after Access login)
 - `GET https://studio-lab.fly.dev/health` → 200 without JWT (Fly health check)
-- `GET https://studio-lab.fly.dev/api/project` without JWT → 401
+- `GET https://studio-lab.fly.dev/api/projects` without JWT → 401
 - SPA loads at `https://studiolab.ultron.sh` and API calls stay same-origin
 
 ## Git and runtime data

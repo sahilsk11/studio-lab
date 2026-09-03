@@ -53,8 +53,8 @@ function createTestApp(verifier: ReturnType<typeof createCloudflareAccessVerifie
       res.status(401).json({ error: 'unauthorized' });
     }
   });
-  app.get('/api/project', (_req, res) => {
-    res.json({ project: {} });
+  app.get('/api/projects', (_req, res) => {
+    res.json({ projects: [] });
   });
   return app;
 }
@@ -93,14 +93,14 @@ describe('Express Access middleware (fail-closed)', () => {
 
   it('rejects /api/* without a JWT', async () => {
     const app = createTestApp(createCloudflareAccessVerifier(config, keySet));
-    const result = await request(app, '/api/project');
+    const result = await request(app, '/api/projects');
     expect(result.status).toBe(401);
     expect(result.body).toEqual({ error: 'unauthorized' });
   });
 
   it('allows /api/* with a valid JWT', async () => {
     const app = createTestApp(createCloudflareAccessVerifier(config, keySet));
-    const result = await request(app, '/api/project', {
+    const result = await request(app, '/api/projects', {
       'cf-access-jwt-assertion': await accessToken(),
     });
     expect(result.status).toBe(200);

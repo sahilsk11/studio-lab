@@ -1,9 +1,16 @@
 import { IMAGE_MAX_REFS, VIDEO_MAX_DURATION, VIDEO_MIN_DURATION } from './config.js';
-import { generateCast, generateFrames, generateImage, generateScenes, generateVideo } from './openrouter.js';
+import {
+  generateCast,
+  generateFrames,
+  generateImage,
+  generateProjectTitle,
+  generateScenes,
+  generateVideo,
+} from './openrouter.js';
 import { assembleImagePrompt, assembleVideoPrompt } from './prompts.js';
 import { concatVideoFiles, readImageDataUri, saveImageFile, saveVideoFile } from './media.js';
 import {
-  ensureProject,
+  createProject,
   getImagePath,
   loadProject,
   markGenerating,
@@ -70,7 +77,7 @@ function findItem(project: Project, kind: ImageKind, id: string) {
 function refUris(project: Project, kind: ImageKind, item: Person | Thing | Scene | Frame): string[] {
   const paths: string[] = [];
   const take = (k: ImageKind, id: string) => {
-    const p = getImagePath(k, id);
+    const p = getImagePath(project.id, k, id);
     if (p) paths.push(p);
   };
   const takeAll = (k: ImageKind, ids: string[]) => {
@@ -112,15 +119,49 @@ function refUris(project: Project, kind: ImageKind, item: Person | Thing | Scene
     .slice(0, IMAGE_MAX_REFS);
 }
 
-export async function runCast(input: {
+export function fallbackTitle(idea: string): string {
+  const cleaned = idea.trim().replace(/\s+/g, ' ');
+  if (!cleaned) return 'Untitled reel';
+  const title = cleaned.split(' ').slice(0, 6).join(' ');
+  return title.length > 42 ? `${title.slice(0, 41).trim()}…` : title;
+}
+
+export async function runCreateProject(input: {
+  userId: string;
   idea: string;
   style: string;
   durationSec: number;
 }): Promise<Project> {
-  ensureProject();
+  let title = fallbackTitle(input.idea);
+  let cost = 0;
+  try {
+    const named = await generateProjectTitle(input);
+    const trimmed = named.title.trim().replace(/^["']|["']$/g, '');
+    if (trimmed) title = trimmed;
+    cost = named.cost;
+  } catch {
+    // No key, or the model failed — still create a visible named project.
+  }
+  return createProject({
+    userId: input.userId,
+    title,
+    idea: input.idea,
+    style: input.style,
+    durationSec: input.durationSec,
+    cost,
+  });
+}
+
+export async function runCast(
+  projectId: string,
+  input: {
+    idea: string;
+    style: string;
+    durationSec: number;
+  },
+): Promise<Project> {
   const result = await generateCast(input);
-  return replaceCast({
-    title: result.title,
+  return replaceCast(projectId, {
     styleNotes: result.styleNotes,
     idea: input.idea,
     style: input.style,
@@ -131,8 +172,8 @@ export async function runCast(input: {
   });
 }
 
-export async function runScenes(): Promise<Project> {
-  const project = ensureProject();
+export async function runScenes(projectId: string): Promise<Project> {
+  const project = loadProject(projectId);
   const result = await generateScenes({
     idea: project.idea,
     style: project.style,
@@ -141,11 +182,11 @@ export async function runScenes(): Promise<Project> {
     people: project.people,
     things: project.things,
   });
-  return replaceScenes({ scenes: result.scenes, cost: result.cost });
+  return replaceScenes(projectId, { scenes: result.scenes, cost: result.cost });
 }
 
-export async function runFrames(): Promise<Project> {
-  const project = ensureProject();
+export async function runFrames(projectId: string): Promise<Project> {
+  const project = loadProject(projectId);
   const result = await generateFrames({
     idea: project.idea,
     style: project.style,
@@ -155,15 +196,15 @@ export async function runFrames(): Promise<Project> {
     things: project.things,
     scenes: project.scenes,
   });
-  return replaceFrames({ frames: result.frames, cost: result.cost });
+  return replaceFrames(projectId, { frames: result.frames, cost: result.cost });
 }
 
-export async function runImage(kind: ImageKind, id: string): Promise<Project> {
-  const project = ensureProject();
+export async function runImage(projectId: string, kind: ImageKind, id: string): Promise<Project> {
+  const project = loadProject(projectId);
   const item = findItem(project, kind, id);
   if (!item) throw new Error(`${kind} ${id} not found`);
 
-  markGenerating(kind, id);
+  markGenerating(projectId, kind, id);
   try {
     const refs = refUris(project, kind, item);
     const { prompt, aspectRatio } = assembleImagePrompt({
@@ -182,27 +223,29 @@ export async function runImage(kind: ImageKind, id: string): Promise<Project> {
       referenceImages: refs.length ? refs : undefined,
     });
     const rel = saveImageFile(project.id, kind, id, result.base64, result.mediaType);
-    markImageDone(kind, id, rel, result.cost);
-    return loadProject();
+    markImageDone(projectId, kind, id, rel, result.cost);
+    return loadProject(projectId);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Image generation failed';
-    markImageError(kind, id, message);
+    markImageError(projectId, kind, id, message);
     throw err;
   }
 }
 
-let videoInFlight: Promise<Project> | null = null;
+const videoInFlight = new Map<string, Promise<Project>>();
 
-export async function runVideo(): Promise<Project> {
-  if (videoInFlight) return videoInFlight;
-  videoInFlight = runVideoJob().finally(() => {
-    videoInFlight = null;
+export async function runVideo(projectId: string): Promise<Project> {
+  const existing = videoInFlight.get(projectId);
+  if (existing) return existing;
+  const job = runVideoJob(projectId).finally(() => {
+    videoInFlight.delete(projectId);
   });
-  return videoInFlight;
+  videoInFlight.set(projectId, job);
+  return job;
 }
 
-async function runVideoJob(): Promise<Project> {
-  const project = ensureProject();
+async function runVideoJob(projectId: string): Promise<Project> {
+  const project = loadProject(projectId);
   if (project.videoUri && project.videoReady) return project;
 
   const stills = [...project.frames]
@@ -214,8 +257,8 @@ async function runVideoJob(): Promise<Project> {
   }
 
   const poster =
-    getImagePath('frame', stills[0].id) ??
-    getImagePath('scene', stills[0].sceneId) ??
+    getImagePath(projectId, 'frame', stills[0].id) ??
+    getImagePath(projectId, 'scene', stills[0].sceneId) ??
     null;
 
   try {
@@ -223,7 +266,7 @@ async function runVideoJob(): Promise<Project> {
     const clipRels: string[] = [];
     let cost = 0;
 
-    markVideoProgress({
+    markVideoProgress(projectId, {
       phase: 'queued',
       clipIndex: 1,
       clipTotal: chunks.length,
@@ -231,13 +274,13 @@ async function runVideoJob(): Promise<Project> {
     });
 
     for (const [i, chunk] of chunks.entries()) {
-      markVideoProgress({
+      markVideoProgress(projectId, {
         phase: 'queued',
         clipIndex: i + 1,
         clipTotal: chunks.length,
       });
       const uris = chunk.frames
-        .map((frame) => readImageDataUri(getImagePath('frame', frame.id)))
+        .map((frame) => readImageDataUri(getImagePath(projectId, 'frame', frame.id)))
         .filter((uri): uri is string => Boolean(uri));
       const first = uris[0];
       const last = uris[uris.length - 1];
@@ -258,7 +301,7 @@ async function runVideoJob(): Promise<Project> {
         lastFrame: last,
         referenceImages: uris,
         onStatus: (status) => {
-          markVideoProgress({
+          markVideoProgress(projectId, {
             phase:
               status === 'in_progress'
                 ? 'rendering'
@@ -275,15 +318,15 @@ async function runVideoJob(): Promise<Project> {
     }
 
     if (clipRels.length > 1) {
-      markVideoProgress({ phase: 'stitching', clipTotal: chunks.length });
+      markVideoProgress(projectId, { phase: 'stitching', clipTotal: chunks.length });
     }
 
     const reelRel = `${project.id}/video/reel.mp4`;
     await concatVideoFiles(clipRels, reelRel);
-    return markVideoReady(poster, reelRel, cost);
+    return markVideoReady(projectId, poster, reelRel, cost);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Video generation failed';
-    markVideoError(message);
+    markVideoError(projectId, message);
     throw err;
   }
 }

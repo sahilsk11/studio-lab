@@ -64,6 +64,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.border,
     zIndex: 10,
+    overflow: 'visible',
   },
   content: { flex: 1 },
   footer: {

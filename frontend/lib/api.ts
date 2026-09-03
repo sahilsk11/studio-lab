@@ -1,4 +1,4 @@
-import type { ImageKind, Project } from '@/types/project';
+import type { ImageKind, Project, ProjectSummary } from '@/types/project';
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL;
 export const DEFAULT_API_URL =
@@ -51,67 +51,102 @@ async function projectCall(method: string, path: string, body?: unknown): Promis
   return withMediaUrls(data.project);
 }
 
-export async function fetchProject(): Promise<Project> {
-  return projectCall('GET', '/api/project');
+function projectUrl(projectId: string, suffix = ''): string {
+  return `/api/projects/${projectId}${suffix}`;
 }
 
-export async function updateProject(patch: {
-  idea?: string;
-  style?: string;
-  durationSec?: number;
-}): Promise<Project> {
-  return projectCall('PATCH', '/api/project', patch);
+export async function listProjects(): Promise<ProjectSummary[]> {
+  const data = await request<{ projects: ProjectSummary[] }>('GET', '/api/projects');
+  return data.projects;
 }
 
-export async function resetRemoteProject(defaults: {
-  style: string;
-  durationSec: number;
-}): Promise<Project> {
-  return projectCall('POST', '/api/project/reset', defaults);
-}
-
-export async function createCast(input: {
+export async function createRemoteProject(input: {
   idea: string;
   style: string;
   durationSec: number;
 }): Promise<Project> {
-  return projectCall('POST', '/api/cast', input);
+  return projectCall('POST', '/api/projects', input);
 }
 
-export async function createScenes(): Promise<Project> {
-  return projectCall('POST', '/api/scenes');
+export async function fetchProject(projectId: string): Promise<Project> {
+  return projectCall('GET', projectUrl(projectId));
 }
 
-export async function createFrames(): Promise<Project> {
-  return projectCall('POST', '/api/frames');
+export async function updateProject(
+  projectId: string,
+  patch: {
+    idea?: string;
+    style?: string;
+    durationSec?: number;
+  },
+): Promise<Project> {
+  return projectCall('PATCH', projectUrl(projectId), patch);
 }
 
-export async function generateItemImage(input: {
-  kind: ImageKind;
-  id: string;
-}): Promise<Project> {
-  return projectCall('POST', '/api/images', input);
+export async function resetRemoteProject(
+  projectId: string,
+  defaults: {
+    style: string;
+    durationSec: number;
+  },
+): Promise<Project> {
+  return projectCall('POST', projectUrl(projectId, '/reset'), defaults);
 }
 
-export async function createVideo(): Promise<Project> {
-  return projectCall('POST', '/api/video');
+export async function createCast(
+  projectId: string,
+  input: {
+    idea: string;
+    style: string;
+    durationSec: number;
+  },
+): Promise<Project> {
+  return projectCall('POST', projectUrl(projectId, '/cast'), input);
 }
 
-export async function patchItem(input: {
-  kind: ImageKind;
-  id: string;
-  name?: string;
-  role?: string;
-  look?: string;
-  title?: string;
-  action?: string;
-  camera?: string;
-}): Promise<Project> {
-  return projectCall('PATCH', '/api/item', input);
+export async function createScenes(projectId: string): Promise<Project> {
+  return projectCall('POST', projectUrl(projectId, '/scenes'));
 }
 
-export async function deleteItem(input: { kind: ImageKind; id: string }): Promise<Project> {
-  return projectCall('DELETE', '/api/item', input);
+export async function createFrames(projectId: string): Promise<Project> {
+  return projectCall('POST', projectUrl(projectId, '/frames'));
+}
+
+export async function generateItemImage(
+  projectId: string,
+  input: {
+    kind: ImageKind;
+    id: string;
+  },
+): Promise<Project> {
+  return projectCall('POST', projectUrl(projectId, '/images'), input);
+}
+
+export async function createVideo(projectId: string): Promise<Project> {
+  return projectCall('POST', projectUrl(projectId, '/video'));
+}
+
+export async function patchItem(
+  projectId: string,
+  input: {
+    kind: ImageKind;
+    id: string;
+    name?: string;
+    role?: string;
+    look?: string;
+    title?: string;
+    action?: string;
+    camera?: string;
+  },
+): Promise<Project> {
+  return projectCall('PATCH', projectUrl(projectId, '/item'), input);
+}
+
+export async function deleteItem(
+  projectId: string,
+  input: { kind: ImageKind; id: string },
+): Promise<Project> {
+  return projectCall('DELETE', projectUrl(projectId, '/item'), input);
 }
 
 export async function checkHealth(

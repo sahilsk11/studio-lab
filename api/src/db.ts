@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 import { DATA_DIR, DB_PATH, MEDIA_DIR } from './config.js';
@@ -7,8 +9,29 @@ const SCHEMA = `
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
 
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
+  phone TEXT,
+  external_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK (
+    COALESCE(email, '') != ''
+    OR COALESCE(phone, '') != ''
+    OR COALESCE(external_id, '') != ''
+  )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_uq ON users(email) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_phone_uq ON users(phone) WHERE phone IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_external_id_uq ON users(external_id) WHERE external_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
   title TEXT NOT NULL DEFAULT '',
   idea TEXT NOT NULL,
   style TEXT NOT NULL,
@@ -21,7 +44,8 @@ CREATE TABLE IF NOT EXISTS projects (
   video_error TEXT,
   total_cost REAL NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS people (
@@ -105,6 +129,8 @@ export function getDb(): DatabaseSync {
   db = new DatabaseSync(DB_PATH);
   db.exec(SCHEMA);
   migrate(db);
+  db.exec('CREATE INDEX IF NOT EXISTS projects_user_id_idx ON projects(user_id)');
+  rekeyLegacyCurrent(db);
   return db;
 }
 
@@ -128,4 +154,40 @@ function migrate(database: DatabaseSync): void {
   if (!have.has('video_started_at')) {
     database.exec('ALTER TABLE projects ADD COLUMN video_started_at INTEGER');
   }
+  if (!have.has('user_id')) {
+    database.exec('ALTER TABLE projects ADD COLUMN user_id TEXT');
+  }
+}
+
+function rekeyLegacyCurrent(database: DatabaseSync): void {
+  const legacy = database.prepare('SELECT id, title, idea FROM projects WHERE id = ?').get('current') as
+    | { id: string; title: string; idea: string }
+    | undefined;
+  if (!legacy) return;
+
+  const newId = randomUUID();
+  const title = legacy.title.trim() || fallbackTitleFromIdea(legacy.idea);
+
+  database.exec('PRAGMA foreign_keys = OFF');
+  try {
+    database.prepare('UPDATE projects SET id = ?, title = ? WHERE id = ?').run(newId, title, 'current');
+    for (const table of ['people', 'things', 'scenes', 'frames'] as const) {
+      database.prepare(`UPDATE ${table} SET project_id = ? WHERE project_id = ?`).run(newId, 'current');
+    }
+  } finally {
+    database.exec('PRAGMA foreign_keys = ON');
+  }
+
+  const oldDir = path.join(MEDIA_DIR, 'current');
+  const newDir = path.join(MEDIA_DIR, newId);
+  if (fs.existsSync(oldDir) && !fs.existsSync(newDir)) {
+    fs.renameSync(oldDir, newDir);
+  }
+}
+
+function fallbackTitleFromIdea(idea: string): string {
+  const cleaned = idea.trim().replace(/\s+/g, ' ');
+  if (!cleaned) return 'Untitled reel';
+  const title = cleaned.split(' ').slice(0, 6).join(' ');
+  return title.length > 42 ? `${title.slice(0, 41).trim()}…` : title;
 }

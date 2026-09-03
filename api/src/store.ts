@@ -1,9 +1,6 @@
-import {
-  DEFAULT_DURATION,
-  DEFAULT_IDEA,
-  DEFAULT_STYLE,
-  PROJECT_ID,
-} from './config.js';
+import { randomUUID } from 'node:crypto';
+
+import { DEFAULT_DURATION, DEFAULT_IDEA, DEFAULT_STYLE } from './config.js';
 import { getDb } from './db.js';
 import { mediaUrl, removeKindMedia, removeProjectMedia, removeVideoMedia } from './media.js';
 import type {
@@ -12,6 +9,7 @@ import type {
   ImageStatus,
   Person,
   Project,
+  ProjectSummary,
   Scene,
   Thing,
   ThingView,
@@ -26,6 +24,15 @@ type ImageRow = {
   image_stale: number;
   image_rev: number;
 };
+
+export class StoreError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'StoreError';
+    this.status = status;
+  }
+}
 
 function now(): string {
   return new Date().toISOString();
@@ -57,66 +64,117 @@ function imageFields(row: ImageRow) {
   };
 }
 
-export function ensureProject(defaults?: {
-  idea?: string;
-  style?: string;
-  durationSec?: number;
+type ProjectRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  idea: string;
+  style: string;
+  style_notes: string;
+  duration_sec: number;
+  video_ready: number;
+  video_poster_path: string | null;
+  video_path: string | null;
+  video_rev: number;
+  video_error: string | null;
+  video_phase: string | null;
+  video_clip_index: number | null;
+  video_clip_total: number | null;
+  video_started_at: number | null;
+  total_cost: number;
+  updated_at: string;
+};
+
+function projectRow(projectId: string): ProjectRow {
+  const row = getDb().prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as
+    | ProjectRow
+    | undefined;
+  if (!row) throw new StoreError(404, 'Project not found');
+  return row;
+}
+
+export function assertOwnedProject(projectId: string, userId: string): ProjectRow {
+  const row = projectRow(projectId);
+  if (row.user_id !== userId) throw new StoreError(404, 'Project not found');
+  return row;
+}
+
+export function claimOrphanedProjects(userId: string): void {
+  getDb().prepare('UPDATE projects SET user_id = ? WHERE user_id IS NULL').run(userId);
+}
+
+export function listNamedProjects(userId: string): ProjectSummary[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT id, title, idea, style, duration_sec, updated_at
+       FROM projects
+       WHERE user_id = ? AND TRIM(title) != ''
+       ORDER BY updated_at DESC`,
+    )
+    .all(userId) as Array<{
+    id: string;
+    title: string;
+    idea: string;
+    style: string;
+    duration_sec: number;
+    updated_at: string;
+  }>;
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    idea: row.idea,
+    style: row.style,
+    durationSec: row.duration_sec,
+    updatedAt: row.updated_at,
+  }));
+}
+
+export function createProject(input: {
+  userId: string;
+  title: string;
+  idea: string;
+  style: string;
+  durationSec: number;
+  cost?: number;
 }): Project {
-  const db = getDb();
-  const row = db.prepare('SELECT id FROM projects WHERE id = ?').get(PROJECT_ID);
-  if (!row) {
-    const ts = now();
-    db.prepare(
-      `INSERT INTO projects (id, title, idea, style, style_notes, duration_sec, video_ready, total_cost, created_at, updated_at)
-       VALUES (?, '', ?, ?, '', ?, 0, 0, ?, ?)`,
-    ).run(
-      PROJECT_ID,
-      defaults?.idea ?? DEFAULT_IDEA,
-      defaults?.style ?? DEFAULT_STYLE,
-      defaults?.durationSec ?? DEFAULT_DURATION,
+  const title = input.title.trim();
+  if (!title) throw new StoreError(400, 'Project title is required');
+
+  const id = randomUUID();
+  const ts = now();
+  getDb()
+    .prepare(
+      `INSERT INTO projects (id, user_id, title, idea, style, style_notes, duration_sec, video_ready, total_cost, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, '', ?, 0, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      input.userId,
+      title,
+      input.idea,
+      input.style,
+      input.durationSec,
+      input.cost ?? 0,
       ts,
       ts,
     );
-  }
-  return loadProject();
+  return loadProject(id);
 }
 
-export function loadProject(): Project {
+export function loadProject(projectId: string): Project {
   const db = getDb();
-  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(PROJECT_ID) as
-    | {
-        id: string;
-        title: string;
-        idea: string;
-        style: string;
-        style_notes: string;
-        duration_sec: number;
-        video_ready: number;
-        video_poster_path: string | null;
-        video_path: string | null;
-        video_rev: number;
-        video_error: string | null;
-        video_phase: string | null;
-        video_clip_index: number | null;
-        video_clip_total: number | null;
-        video_started_at: number | null;
-        total_cost: number;
-      }
-    | undefined;
-
-  if (!project) return ensureProject();
+  const project = projectRow(projectId);
 
   const people = db
     .prepare('SELECT * FROM people WHERE project_id = ? ORDER BY sort_order, id')
-    .all(PROJECT_ID) as Array<
-    ImageRow & { id: string; name: string; role: string; look: string }
-  >;
+    .all(projectId) as Array<ImageRow & { id: string; name: string; role: string; look: string }>;
   const things = db
     .prepare('SELECT * FROM things WHERE project_id = ? ORDER BY sort_order, id')
-    .all(PROJECT_ID) as Array<ImageRow & { id: string; name: string; look: string; views_json: string }>;
+    .all(projectId) as Array<ImageRow & { id: string; name: string; look: string; views_json: string }>;
   const scenes = db
     .prepare('SELECT * FROM scenes WHERE project_id = ? ORDER BY sort_order, id')
-    .all(PROJECT_ID) as Array<
+    .all(projectId) as Array<
     ImageRow & {
       id: string;
       title: string;
@@ -127,7 +185,7 @@ export function loadProject(): Project {
   >;
   const frames = db
     .prepare('SELECT * FROM frames WHERE project_id = ? ORDER BY sort_order, id')
-    .all(PROJECT_ID) as Array<
+    .all(projectId) as Array<
     ImageRow & {
       id: string;
       scene_id: string;
@@ -141,6 +199,7 @@ export function loadProject(): Project {
 
   return {
     id: project.id,
+    userId: project.user_id,
     title: project.title,
     idea: project.idea,
     style: project.style,
@@ -190,38 +249,47 @@ export function loadProject(): Project {
   };
 }
 
-export function patchProject(patch: {
-  idea?: string;
-  style?: string;
-  durationSec?: number;
-}): Project {
-  ensureProject();
-  const db = getDb();
-  const current = db.prepare('SELECT idea, style, duration_sec FROM projects WHERE id = ?').get(
-    PROJECT_ID,
-  ) as { idea: string; style: string; duration_sec: number };
-  db.prepare(
-    `UPDATE projects SET idea = ?, style = ?, duration_sec = ?, updated_at = ? WHERE id = ?`,
-  ).run(
-    patch.idea ?? current.idea,
-    patch.style ?? current.style,
-    patch.durationSec ?? current.duration_sec,
-    now(),
-    PROJECT_ID,
-  );
-  return loadProject();
+export function loadOwnedProject(projectId: string, userId: string): Project {
+  assertOwnedProject(projectId, userId);
+  return loadProject(projectId);
 }
 
-export function resetProject(defaults?: { style?: string; durationSec?: number }): Project {
+export function patchProject(
+  projectId: string,
+  patch: {
+    idea?: string;
+    style?: string;
+    durationSec?: number;
+  },
+): Project {
+  const current = projectRow(projectId);
+  getDb()
+    .prepare(
+      `UPDATE projects SET idea = ?, style = ?, duration_sec = ?, updated_at = ? WHERE id = ?`,
+    )
+    .run(
+      patch.idea ?? current.idea,
+      patch.style ?? current.style,
+      patch.durationSec ?? current.duration_sec,
+      now(),
+      projectId,
+    );
+  return loadProject(projectId);
+}
+
+export function resetProject(
+  projectId: string,
+  defaults?: { style?: string; durationSec?: number },
+): Project {
   const db = getDb();
   db.exec('BEGIN');
   try {
-    db.prepare('DELETE FROM frames WHERE project_id = ?').run(PROJECT_ID);
-    db.prepare('DELETE FROM scenes WHERE project_id = ?').run(PROJECT_ID);
-    db.prepare('DELETE FROM things WHERE project_id = ?').run(PROJECT_ID);
-    db.prepare('DELETE FROM people WHERE project_id = ?').run(PROJECT_ID);
+    db.prepare('DELETE FROM frames WHERE project_id = ?').run(projectId);
+    db.prepare('DELETE FROM scenes WHERE project_id = ?').run(projectId);
+    db.prepare('DELETE FROM things WHERE project_id = ?').run(projectId);
+    db.prepare('DELETE FROM people WHERE project_id = ?').run(projectId);
     db.prepare(
-      `UPDATE projects SET title = '', idea = ?, style = ?, style_notes = '', duration_sec = ?,
+      `UPDATE projects SET idea = ?, style = ?, style_notes = '', duration_sec = ?,
        video_ready = 0, video_poster_path = NULL, video_path = NULL, video_error = NULL,
        video_phase = 'idle', video_clip_index = NULL, video_clip_total = NULL, video_started_at = NULL,
        video_rev = video_rev + 1, total_cost = 0, updated_at = ? WHERE id = ?`,
@@ -230,55 +298,56 @@ export function resetProject(defaults?: { style?: string; durationSec?: number }
       defaults?.style ?? DEFAULT_STYLE,
       defaults?.durationSec ?? DEFAULT_DURATION,
       now(),
-      PROJECT_ID,
+      projectId,
     );
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
-  removeProjectMedia(PROJECT_ID);
-  return loadProject();
+  removeProjectMedia(projectId);
+  return loadProject(projectId);
 }
 
-function addCost(cost: number): void {
+function addCost(projectId: string, cost: number): void {
   getDb()
     .prepare('UPDATE projects SET total_cost = total_cost + ?, updated_at = ? WHERE id = ?')
-    .run(cost, now(), PROJECT_ID);
+    .run(cost, now(), projectId);
 }
 
-export function replaceCast(input: {
-  title: string;
-  styleNotes: string;
-  idea: string;
-  style: string;
-  durationSec: number;
-  people: Pick<Person, 'id' | 'name' | 'role' | 'look'>[];
-  things: Pick<Thing, 'id' | 'name' | 'look' | 'views'>[];
-  cost: number;
-}): Project {
-  ensureProject();
+export function replaceCast(
+  projectId: string,
+  input: {
+    styleNotes: string;
+    idea: string;
+    style: string;
+    durationSec: number;
+    people: Pick<Person, 'id' | 'name' | 'role' | 'look'>[];
+    things: Pick<Thing, 'id' | 'name' | 'look' | 'views'>[];
+    cost: number;
+  },
+): Project {
+  projectRow(projectId);
   const db = getDb();
   db.exec('BEGIN');
   try {
-    db.prepare('DELETE FROM frames WHERE project_id = ?').run(PROJECT_ID);
-    db.prepare('DELETE FROM scenes WHERE project_id = ?').run(PROJECT_ID);
-    db.prepare('DELETE FROM things WHERE project_id = ?').run(PROJECT_ID);
-    db.prepare('DELETE FROM people WHERE project_id = ?').run(PROJECT_ID);
+    db.prepare('DELETE FROM frames WHERE project_id = ?').run(projectId);
+    db.prepare('DELETE FROM scenes WHERE project_id = ?').run(projectId);
+    db.prepare('DELETE FROM things WHERE project_id = ?').run(projectId);
+    db.prepare('DELETE FROM people WHERE project_id = ?').run(projectId);
     db.prepare(
-      `UPDATE projects SET title = ?, style_notes = ?, idea = ?, style = ?, duration_sec = ?,
+      `UPDATE projects SET style_notes = ?, idea = ?, style = ?, duration_sec = ?,
        video_ready = 0, video_poster_path = NULL, video_path = NULL, video_error = NULL,
        video_phase = 'idle', video_clip_index = NULL, video_clip_total = NULL, video_started_at = NULL,
        video_rev = video_rev + 1, total_cost = ?, updated_at = ? WHERE id = ?`,
     ).run(
-      input.title,
       input.styleNotes,
       input.idea,
       input.style,
       input.durationSec,
       input.cost,
       now(),
-      PROJECT_ID,
+      projectId,
     );
 
     const insertPerson = db.prepare(
@@ -286,7 +355,7 @@ export function replaceCast(input: {
        VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
     );
     input.people.forEach((person, i) => {
-      insertPerson.run(PROJECT_ID, person.id, person.name, person.role, person.look, i);
+      insertPerson.run(projectId, person.id, person.name, person.role, person.look, i);
     });
 
     const insertThing = db.prepare(
@@ -295,7 +364,7 @@ export function replaceCast(input: {
     );
     input.things.forEach((thing, i) => {
       insertThing.run(
-        PROJECT_ID,
+        projectId,
         thing.id,
         thing.name,
         thing.look,
@@ -308,26 +377,29 @@ export function replaceCast(input: {
     db.exec('ROLLBACK');
     throw err;
   }
-  removeKindMedia(PROJECT_ID, ['person', 'thing', 'scene', 'frame']);
-  removeVideoMedia(PROJECT_ID);
-  return loadProject();
+  removeKindMedia(projectId, ['person', 'thing', 'scene', 'frame']);
+  removeVideoMedia(projectId);
+  return loadProject(projectId);
 }
 
-export function replaceScenes(input: {
-  scenes: Pick<Scene, 'id' | 'title' | 'look' | 'peopleIds' | 'thingIds'>[];
-  cost: number;
-}): Project {
-  ensureProject();
+export function replaceScenes(
+  projectId: string,
+  input: {
+    scenes: Pick<Scene, 'id' | 'title' | 'look' | 'peopleIds' | 'thingIds'>[];
+    cost: number;
+  },
+): Project {
+  projectRow(projectId);
   const db = getDb();
   db.exec('BEGIN');
   try {
-    db.prepare('DELETE FROM frames WHERE project_id = ?').run(PROJECT_ID);
-    db.prepare('DELETE FROM scenes WHERE project_id = ?').run(PROJECT_ID);
+    db.prepare('DELETE FROM frames WHERE project_id = ?').run(projectId);
+    db.prepare('DELETE FROM scenes WHERE project_id = ?').run(projectId);
     db.prepare(
       `UPDATE projects SET video_ready = 0, video_poster_path = NULL, video_path = NULL,
        video_error = NULL, video_phase = 'idle', video_clip_index = NULL, video_clip_total = NULL,
        video_started_at = NULL, video_rev = video_rev + 1, updated_at = ? WHERE id = ?`,
-    ).run(now(), PROJECT_ID);
+    ).run(now(), projectId);
 
     const insert = db.prepare(
       `INSERT INTO scenes (project_id, id, title, look, people_ids_json, thing_ids_json, sort_order, image_status)
@@ -335,7 +407,7 @@ export function replaceScenes(input: {
     );
     input.scenes.forEach((scene, i) => {
       insert.run(
-        PROJECT_ID,
+        projectId,
         scene.id,
         scene.title,
         scene.look,
@@ -344,31 +416,34 @@ export function replaceScenes(input: {
         i,
       );
     });
-    addCost(input.cost);
+    addCost(projectId, input.cost);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
-  removeKindMedia(PROJECT_ID, ['scene', 'frame']);
-  removeVideoMedia(PROJECT_ID);
-  return loadProject();
+  removeKindMedia(projectId, ['scene', 'frame']);
+  removeVideoMedia(projectId);
+  return loadProject(projectId);
 }
 
-export function replaceFrames(input: {
-  frames: Pick<Frame, 'id' | 'order' | 'sceneId' | 'peopleIds' | 'thingIds' | 'action' | 'camera'>[];
-  cost: number;
-}): Project {
-  ensureProject();
+export function replaceFrames(
+  projectId: string,
+  input: {
+    frames: Pick<Frame, 'id' | 'order' | 'sceneId' | 'peopleIds' | 'thingIds' | 'action' | 'camera'>[];
+    cost: number;
+  },
+): Project {
+  projectRow(projectId);
   const db = getDb();
   db.exec('BEGIN');
   try {
-    db.prepare('DELETE FROM frames WHERE project_id = ?').run(PROJECT_ID);
+    db.prepare('DELETE FROM frames WHERE project_id = ?').run(projectId);
     db.prepare(
       `UPDATE projects SET video_ready = 0, video_poster_path = NULL, video_path = NULL,
        video_error = NULL, video_phase = 'idle', video_clip_index = NULL, video_clip_total = NULL,
        video_started_at = NULL, video_rev = video_rev + 1, updated_at = ? WHERE id = ?`,
-    ).run(now(), PROJECT_ID);
+    ).run(now(), projectId);
 
     const insert = db.prepare(
       `INSERT INTO frames (project_id, id, scene_id, sort_order, people_ids_json, thing_ids_json, action, camera, image_status)
@@ -377,7 +452,7 @@ export function replaceFrames(input: {
     const sorted = [...input.frames].sort((a, b) => a.order - b.order);
     sorted.forEach((frame, i) => {
       insert.run(
-        PROJECT_ID,
+        projectId,
         frame.id,
         frame.sceneId,
         frame.order || i + 1,
@@ -387,15 +462,15 @@ export function replaceFrames(input: {
         frame.camera,
       );
     });
-    addCost(input.cost);
+    addCost(projectId, input.cost);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
-  removeKindMedia(PROJECT_ID, ['frame']);
-  removeVideoMedia(PROJECT_ID);
-  return loadProject();
+  removeKindMedia(projectId, ['frame']);
+  removeVideoMedia(projectId);
+  return loadProject(projectId);
 }
 
 const TABLE: Record<ImageKind, string> = {
@@ -405,15 +480,16 @@ const TABLE: Record<ImageKind, string> = {
   frame: 'frames',
 };
 
-export function markGenerating(kind: ImageKind, id: string): void {
+export function markGenerating(projectId: string, kind: ImageKind, id: string): void {
   getDb()
     .prepare(
       `UPDATE ${TABLE[kind]} SET image_status = 'generating', image_error = NULL WHERE project_id = ? AND id = ?`,
     )
-    .run(PROJECT_ID, id);
+    .run(projectId, id);
 }
 
 export function markImageDone(
+  projectId: string,
   kind: ImageKind,
   id: string,
   imagePath: string,
@@ -423,45 +499,53 @@ export function markImageDone(
   db.prepare(
     `UPDATE ${TABLE[kind]} SET image_status = 'done', image_path = ?, image_cost = ?, image_error = NULL,
      image_stale = 0, image_rev = image_rev + 1 WHERE project_id = ? AND id = ?`,
-  ).run(imagePath, cost, PROJECT_ID, id);
-  addCost(cost);
+  ).run(imagePath, cost, projectId, id);
+  addCost(projectId, cost);
 }
 
-export function markImageError(kind: ImageKind, id: string, message: string): void {
+export function markImageError(projectId: string, kind: ImageKind, id: string, message: string): void {
   getDb()
     .prepare(
       `UPDATE ${TABLE[kind]} SET image_status = 'error', image_error = ? WHERE project_id = ? AND id = ?`,
     )
-    .run(message, PROJECT_ID, id);
+    .run(message, projectId, id);
 }
 
-export function markVideoReady(posterPath: string | null, videoPath: string, cost: number): Project {
+export function markVideoReady(
+  projectId: string,
+  posterPath: string | null,
+  videoPath: string,
+  cost: number,
+): Project {
   const db = getDb();
   db.prepare(
     `UPDATE projects SET video_ready = 1, video_poster_path = ?, video_path = ?, video_error = NULL,
      video_phase = 'ready', video_clip_index = NULL, video_clip_total = NULL, video_started_at = NULL,
      video_rev = video_rev + 1, updated_at = ? WHERE id = ?`,
-  ).run(posterPath, videoPath, now(), PROJECT_ID);
-  addCost(cost);
-  return loadProject();
+  ).run(posterPath, videoPath, now(), projectId);
+  addCost(projectId, cost);
+  return loadProject(projectId);
 }
 
-export function markVideoError(message: string): Project {
+export function markVideoError(projectId: string, message: string): Project {
   getDb()
     .prepare(
       `UPDATE projects SET video_ready = 0, video_error = ?, video_phase = 'error', video_path = NULL,
        updated_at = ? WHERE id = ?`,
     )
-    .run(message, now(), PROJECT_ID);
-  return loadProject();
+    .run(message, now(), projectId);
+  return loadProject(projectId);
 }
 
-export function markVideoProgress(patch: {
-  phase: VideoPhase;
-  clipIndex?: number;
-  clipTotal?: number;
-  startedAt?: number | null;
-}): void {
+export function markVideoProgress(
+  projectId: string,
+  patch: {
+    phase: VideoPhase;
+    clipIndex?: number;
+    clipTotal?: number;
+    startedAt?: number | null;
+  },
+): void {
   const sets = ['video_phase = ?', 'updated_at = ?'];
   const values: Array<string | number | null> = [patch.phase, now()];
   if (patch.clipIndex !== undefined) {
@@ -476,16 +560,16 @@ export function markVideoProgress(patch: {
     sets.push('video_started_at = ?');
     values.push(patch.startedAt);
   }
-  values.push(PROJECT_ID);
+  values.push(projectId);
   getDb()
     .prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`)
     .run(...values);
 }
 
-export function getImagePath(kind: ImageKind, id: string): string | null {
+export function getImagePath(projectId: string, kind: ImageKind, id: string): string | null {
   const row = getDb()
     .prepare(`SELECT image_path FROM ${TABLE[kind]} WHERE project_id = ? AND id = ?`)
-    .get(PROJECT_ID, id) as { image_path: string | null } | undefined;
+    .get(projectId, id) as { image_path: string | null } | undefined;
   return row?.image_path ?? null;
 }
 
@@ -498,23 +582,22 @@ export type ItemPatch = {
   camera?: string;
 };
 
-function clearVideo(): void {
+function clearVideo(projectId: string): void {
   getDb()
     .prepare(
       `UPDATE projects SET video_ready = 0, video_poster_path = NULL, video_path = NULL,
        video_error = NULL, video_phase = 'idle', video_clip_index = NULL, video_clip_total = NULL,
        video_started_at = NULL, video_rev = video_rev + 1, updated_at = ? WHERE id = ?`,
     )
-    .run(now(), PROJECT_ID);
-  removeVideoMedia(PROJECT_ID);
+    .run(now(), projectId);
+  removeVideoMedia(projectId);
 }
 
-export function patchItem(kind: ImageKind, id: string, patch: ItemPatch): Project {
-  ensureProject();
+export function patchItem(projectId: string, kind: ImageKind, id: string, patch: ItemPatch): Project {
   const db = getDb();
   const table = TABLE[kind];
-  const exists = db.prepare(`SELECT id FROM ${table} WHERE project_id = ? AND id = ?`).get(PROJECT_ID, id);
-  if (!exists) throw new Error(`${kind} ${id} not found`);
+  const exists = db.prepare(`SELECT id FROM ${table} WHERE project_id = ? AND id = ?`).get(projectId, id);
+  if (!exists) throw new StoreError(404, `${kind} ${id} not found`);
 
   const sets: string[] = [];
   const values: string[] = [];
@@ -541,17 +624,16 @@ export function patchItem(kind: ImageKind, id: string, patch: ItemPatch): Projec
 
   if (sets.length) {
     sets.push(`image_stale = CASE WHEN image_status = 'done' THEN 1 ELSE image_stale END`);
-    values.push(PROJECT_ID, id);
-    db.prepare(
-      `UPDATE ${table} SET ${sets.join(', ')} WHERE project_id = ? AND id = ?`,
-    ).run(...values);
+    values.push(projectId, id);
+    db.prepare(`UPDATE ${table} SET ${sets.join(', ')} WHERE project_id = ? AND id = ?`).run(...values);
   }
 
-  clearVideo();
-  return loadProject();
+  clearVideo(projectId);
+  return loadProject(projectId);
 }
 
 function rewriteIds(
+  projectId: string,
   table: 'scenes' | 'frames',
   column: 'people_ids_json' | 'thing_ids_json',
   dropId: string,
@@ -559,35 +641,32 @@ function rewriteIds(
   const db = getDb();
   const rows = db
     .prepare(`SELECT id, ${column} AS json FROM ${table} WHERE project_id = ?`)
-    .all(PROJECT_ID) as Array<{ id: string; json: string }>;
-  const update = db.prepare(
-    `UPDATE ${table} SET ${column} = ? WHERE project_id = ? AND id = ?`,
-  );
+    .all(projectId) as Array<{ id: string; json: string }>;
+  const update = db.prepare(`UPDATE ${table} SET ${column} = ? WHERE project_id = ? AND id = ?`);
   for (const row of rows) {
     const ids = parseJson<string[]>(row.json, []).filter((item) => item !== dropId);
-    update.run(JSON.stringify(ids), PROJECT_ID, row.id);
+    update.run(JSON.stringify(ids), projectId, row.id);
   }
 }
 
-export function deleteItem(kind: ImageKind, id: string): Project {
-  ensureProject();
+export function deleteItem(projectId: string, kind: ImageKind, id: string): Project {
   const db = getDb();
   const table = TABLE[kind];
-  const exists = db.prepare(`SELECT id FROM ${table} WHERE project_id = ? AND id = ?`).get(PROJECT_ID, id);
-  if (!exists) throw new Error(`${kind} ${id} not found`);
+  const exists = db.prepare(`SELECT id FROM ${table} WHERE project_id = ? AND id = ?`).get(projectId, id);
+  if (!exists) throw new StoreError(404, `${kind} ${id} not found`);
 
   if (kind === 'person') {
-    rewriteIds('scenes', 'people_ids_json', id);
-    rewriteIds('frames', 'people_ids_json', id);
+    rewriteIds(projectId, 'scenes', 'people_ids_json', id);
+    rewriteIds(projectId, 'frames', 'people_ids_json', id);
   } else if (kind === 'thing') {
-    rewriteIds('scenes', 'thing_ids_json', id);
-    rewriteIds('frames', 'thing_ids_json', id);
+    rewriteIds(projectId, 'scenes', 'thing_ids_json', id);
+    rewriteIds(projectId, 'frames', 'thing_ids_json', id);
   } else if (kind === 'scene') {
-    db.prepare(`DELETE FROM frames WHERE project_id = ? AND scene_id = ?`).run(PROJECT_ID, id);
-    removeKindMedia(PROJECT_ID, ['frame']);
+    db.prepare(`DELETE FROM frames WHERE project_id = ? AND scene_id = ?`).run(projectId, id);
+    removeKindMedia(projectId, ['frame']);
   }
 
-  db.prepare(`DELETE FROM ${table} WHERE project_id = ? AND id = ?`).run(PROJECT_ID, id);
-  clearVideo();
-  return loadProject();
+  db.prepare(`DELETE FROM ${table} WHERE project_id = ? AND id = ?`).run(projectId, id);
+  clearVideo(projectId);
+  return loadProject(projectId);
 }

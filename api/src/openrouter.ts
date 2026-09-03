@@ -1,6 +1,6 @@
 import { IMAGE_MAX_REFS, IMAGE_MODEL, IMAGE_RESOLUTION, VIDEO_ASPECT_RATIO, VIDEO_MAX_DURATION, VIDEO_MIN_DURATION, VIDEO_MODEL, VIDEO_POLL_FETCH_MS, VIDEO_POLL_MS, VIDEO_RESOLUTION, VIDEO_SUPPORTS_LAST_FRAME, VIDEO_TIMEOUT_MS } from './config.js';
 import { chatJson, headers, OPENROUTER_BASE } from './llm.js';
-import { CAST_SYSTEM, SCENES_SYSTEM, framesSystem, worldBible } from './prompts.js';
+import { CAST_SYSTEM, SCENES_SYSTEM, TITLE_SYSTEM, framesSystem, worldBible } from './prompts.js';
 import type { CastResult, FramesResult, Person, Scene, ScenesResult, Thing, ThingView } from './types.js';
 
 const viewSchema = {
@@ -152,6 +152,31 @@ function filterIds(ids: unknown, known: Set<string>): string[] {
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : '';
+}
+
+const TITLE_SCHEMA = {
+  type: 'object',
+  properties: { title: { type: 'string' } },
+  required: ['title'],
+  additionalProperties: false,
+};
+
+export async function generateProjectTitle(input: {
+  idea: string;
+  style: string;
+  durationSec: number;
+}): Promise<{ title: string; cost: number }> {
+  const { data, cost } = await chatJson<{ title: string }>({
+    system: TITLE_SYSTEM,
+    user: worldBible({
+      idea: input.idea,
+      style: input.style,
+      durationSec: input.durationSec,
+    }),
+    schemaName: 'project_title',
+    schema: TITLE_SCHEMA,
+  });
+  return { title: str(data.title), cost };
 }
 
 export async function generateCast(input: {

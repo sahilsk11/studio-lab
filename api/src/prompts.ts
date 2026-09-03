@@ -57,6 +57,8 @@ export function worldBible(input: WorldInput): string {
   return lines.join('\n\n');
 }
 
+export const TITLE_SYSTEM = `Name this short film for a project picker. 2–5 words, Title Case, no quotes, no trailing punctuation, not a sentence, not Untitled. Prefer a concrete image from the idea over a generic mood.`;
+
 export const CAST_SYSTEM = `You are a video art director. Extract the recurring PEOPLE and THINGS that need locked looks for a vertical video. Do not invent scenes, action, or camera. People can be empty. Things can be empty. Ids must be unique kebab-case slugs. views is always exactly two entries — you choose what two angles of the object to show on a reference sheet.
 
 styleNotes is a shared visual bible for THIS idea (2–4 sentences): the medium (what the pictures physically are), palette, lighting, and design language that EVERY person and object must share. Be explicit about what this is not (for Anime: not photoreal, not 3D CGI). Do not describe a single character; describe the universe.

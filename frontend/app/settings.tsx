@@ -57,7 +57,7 @@ export default function SettingsScreen() {
 
   return (
     <Screen
-      header={<AppHeader title="Settings" onBack={() => router.back()} showSettings={false} />}
+      header={<AppHeader title="Settings" onBack={() => router.back()} showSettings={false} showProjectPicker={false} />}
       footer={<Button label="Done" icon="checkmark" onPress={() => router.back()} />}>
       <ScrollView
         showsVerticalScrollIndicator={false}

@@ -197,6 +197,7 @@ export function createDemoProject(): Project {
 
   return {
     id: 'demo',
+    userId: 'demo',
     title: 'Balcony jump',
     idea: 'A courier is late for a delivery and takes a shortcut off a balcony.',
     style: 'Grainy film',

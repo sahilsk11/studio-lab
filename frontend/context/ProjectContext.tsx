@@ -12,15 +12,18 @@ import { useSettings } from '@/context/SettingsContext';
 import {
   createCast,
   createFrames,
+  createRemoteProject,
   createScenes,
   createVideo,
   deleteItem as deleteItemRemote,
   fetchProject,
   generateItemImage,
+  listProjects,
   patchItem as patchItemRemote,
   resetRemoteProject,
   updateProject,
 } from '@/lib/api';
+import { loadActiveProjectId, saveActiveProjectId } from '@/lib/session';
 import {
   createDemoProject,
   FIXTURE_DELAY,
@@ -31,13 +34,15 @@ import {
 } from '@/lib/fixtures';
 import { videoPosterPlaceholder } from '@/lib/placeholders';
 import { IMAGE_CONCURRENCY, needsImage, runPool, withPendingImage, type ImageTarget } from '@/lib/project';
-import type { Frame, ImageKind, Person, Project, Scene, Thing } from '@/types/project';
+import type { Frame, ImageKind, Person, Project, ProjectSummary, Scene, Thing } from '@/types/project';
 
 const DEFAULT_IDEA =
   'A courier is late for a delivery and takes a shortcut off a balcony.';
 
 export type ProjectContextValue = {
   project: Project;
+  projects: ProjectSummary[];
+  activeProjectId: string | null;
   hydrated: boolean;
   testMode: boolean;
   error: string | null;
@@ -46,6 +51,9 @@ export type ProjectContextValue = {
   setDuration: (durationSec: number) => void;
   setTestMode: (on: boolean) => void;
   loadDemoProject: () => void;
+  startFresh: () => void;
+  startProject: () => Promise<Project>;
+  selectProject: (id: string) => Promise<Project>;
   generateCast: (options?: { replace?: boolean }) => Promise<void>;
   generateScenes: (options?: { replace?: boolean }) => Promise<void>;
   generateFrames: (options?: { replace?: boolean }) => Promise<void>;
@@ -78,7 +86,8 @@ export type ProjectContextValue = {
 const ProjectContext = createContext<ProjectContextValue | null>(null);
 
 const emptyProject = (style: string, durationSec: number): Project => ({
-  id: 'current',
+  id: '',
+  userId: '',
   title: '',
   idea: DEFAULT_IDEA,
   style,
@@ -91,6 +100,29 @@ const emptyProject = (style: string, durationSec: number): Project => ({
   videoReady: false,
   totalCost: 0,
 });
+
+function asSummary(project: Project): ProjectSummary {
+  return {
+    id: project.id,
+    title: project.title,
+    idea: project.idea,
+    style: project.style,
+    durationSec: project.durationSec,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function upsertSummary(list: ProjectSummary[], project: Project): ProjectSummary[] {
+  if (!project.id || !project.title.trim()) return list;
+  return [asSummary(project), ...list.filter((item) => item.id !== project.id)];
+}
+
+function fallbackTitle(idea: string): string {
+  const cleaned = idea.trim().replace(/\s+/g, ' ');
+  if (!cleaned) return 'Untitled reel';
+  const title = cleaned.split(' ').slice(0, 6).join(' ');
+  return title.length > 42 ? `${title.slice(0, 41).trim()}…` : title;
+}
 
 function findItem(project: Project, kind: ImageKind, id: string): ImageTarget | undefined {
   switch (kind) {
@@ -153,11 +185,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [project, setProject] = useState<Project>(() =>
     emptyProject(settings.defaultStyle, settings.defaultDuration),
   );
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const projectRef = useRef(project);
   projectRef.current = project;
+  const activeIdRef = useRef(activeProjectId);
+  activeIdRef.current = activeProjectId;
 
   const testMode = settings.testMode;
   const testModeRef = useRef(testMode);
@@ -168,6 +204,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const persistReady = useRef(false);
   const imageJobs = useRef(new Set<string>());
 
+  const rememberActive = useCallback((id: string | null) => {
+    activeIdRef.current = id;
+    setActiveProjectId(id);
+    void saveActiveProjectId(id);
+  }, []);
+
+  const adoptProject = useCallback(
+    (next: Project) => {
+      persistReady.current = Boolean(next.id);
+      setProject(next);
+      rememberActive(next.id || null);
+      setProjects((list) => upsertSummary(list, next));
+    },
+    [rememberActive],
+  );
+
   useEffect(() => {
     if (!settingsHydrated || hydrated) return;
     let cancelled = false;
@@ -177,20 +229,36 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       if (s.testMode) {
         persistReady.current = false;
         if (!cancelled) {
-          setProject(createDemoProject());
+          const demo = createDemoProject();
+          setProject(demo);
+          setProjects([asSummary(demo)]);
+          setActiveProjectId(demo.id);
           setHydrated(true);
         }
         return;
       }
       try {
-        const remote = await fetchProject();
-        persistReady.current = true;
-        if (!cancelled) setProject(remote);
+        const [named, storedId] = await Promise.all([listProjects(), loadActiveProjectId()]);
+        if (cancelled) return;
+        setProjects(named);
+        const preferred = named.find((item) => item.id === storedId) ?? named[0];
+        if (preferred) {
+          const remote = await fetchProject(preferred.id);
+          if (cancelled) return;
+          persistReady.current = true;
+          setProject(remote);
+          rememberActive(remote.id);
+        } else {
+          persistReady.current = false;
+          setProject(emptyProject(s.defaultStyle, s.defaultDuration));
+          rememberActive(null);
+        }
       } catch (err) {
         if (!cancelled) {
           persistReady.current = false;
           setProject(emptyProject(s.defaultStyle, s.defaultDuration));
-          setError(err instanceof Error ? err.message : 'Could not load project from server');
+          rememberActive(null);
+          setError(err instanceof Error ? err.message : 'Could not load projects from server');
         }
       } finally {
         if (!cancelled) setHydrated(true);
@@ -200,12 +268,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [settingsHydrated, hydrated]);
+  }, [settingsHydrated, hydrated, rememberActive]);
 
   useEffect(() => {
-    if (!hydrated || testMode || !persistReady.current) return;
+    if (!hydrated || testMode || !persistReady.current || !project.id) return;
     const t = setTimeout(() => {
-      updateProject({
+      updateProject(project.id, {
         idea: projectRef.current.idea,
         style: projectRef.current.style,
         durationSec: projectRef.current.durationSec,
@@ -214,7 +282,61 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       });
     }, 400);
     return () => clearTimeout(t);
-  }, [project.idea, project.style, project.durationSec, hydrated, testMode]);
+  }, [project.id, project.idea, project.style, project.durationSec, hydrated, testMode]);
+
+  const startFresh = useCallback(() => {
+    persistReady.current = false;
+    const s = settingsRef.current;
+    setProject(emptyProject(s.defaultStyle, s.defaultDuration));
+    rememberActive(null);
+    setError(null);
+  }, [rememberActive]);
+
+  const startProject = useCallback(async () => {
+    const current = projectRef.current;
+    if (current.id) return current;
+    setError(null);
+    if (testModeRef.current) {
+      const next: Project = {
+        ...current,
+        id: `demo-${Date.now()}`,
+        userId: 'demo',
+        title: fallbackTitle(current.idea),
+      };
+      adoptProject(next);
+      return next;
+    }
+    try {
+      const created = await createRemoteProject({
+        idea: current.idea,
+        style: current.style,
+        durationSec: current.durationSec,
+      });
+      adoptProject(created);
+      return created;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create project');
+      throw err;
+    }
+  }, [adoptProject]);
+
+  const selectProject = useCallback(
+    async (id: string) => {
+      setError(null);
+      if (testModeRef.current) {
+        const demo = createDemoProject();
+        if (id === demo.id || id.startsWith('demo')) {
+          const match = projectRef.current.id === id ? projectRef.current : demo;
+          adoptProject(match);
+          return match;
+        }
+      }
+      const remote = await fetchProject(id);
+      adoptProject(remote);
+      return remote;
+    },
+    [adoptProject],
+  );
 
   const setTestMode = useCallback(
     (on: boolean) => {
@@ -222,26 +344,43 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       setError(null);
       if (on) {
         persistReady.current = false;
-        setProject(createDemoProject());
+        const demo = createDemoProject();
+        setProject(demo);
+        setProjects([asSummary(demo)]);
+        setActiveProjectId(demo.id);
         return;
       }
-      fetchProject()
-        .then((remote) => {
+      listProjects()
+        .then(async (named) => {
+          setProjects(named);
+          if (!named[0]) {
+            persistReady.current = false;
+            const s = settingsRef.current;
+            setProject(emptyProject(s.defaultStyle, s.defaultDuration));
+            rememberActive(null);
+            return;
+          }
+          const remote = await fetchProject(named[0].id);
           persistReady.current = true;
           setProject(remote);
+          rememberActive(remote.id);
         })
         .catch((err) => {
           persistReady.current = false;
           const s = settingsRef.current;
           setProject(emptyProject(s.defaultStyle, s.defaultDuration));
-          setError(err instanceof Error ? err.message : 'Could not load project from server');
+          rememberActive(null);
+          setError(err instanceof Error ? err.message : 'Could not load projects from server');
         });
     },
-    [setSetting],
+    [rememberActive, setSetting],
   );
 
   const loadDemoProject = useCallback(() => {
-    setProject(createDemoProject());
+    const demo = createDemoProject();
+    setProject(demo);
+    setProjects([asSummary(demo)]);
+    setActiveProjectId(demo.id);
     setError(null);
   }, []);
 
@@ -276,12 +415,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const next = await generateItemImage({ kind, id });
+      const next = await generateItemImage(projectRef.current.id, { kind, id });
       setProject(next);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Image generation failed';
       try {
-        if (!testModeRef.current) setProject(await fetchProject());
+        if (!testModeRef.current && projectRef.current.id) setProject(await fetchProject(projectRef.current.id));
         else {
           setProject((p) =>
             updateItem(p, kind, id, (item) => ({
@@ -442,7 +581,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       try {
-        setProject(await patchItemRemote({ kind, id, ...fields }));
+        setProject(await patchItemRemote(projectRef.current.id, { kind, id, ...fields }));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not save edit');
         throw err;
@@ -495,7 +634,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      setProject(await deleteItemRemote({ kind, id }));
+      setProject(await deleteItemRemote(projectRef.current.id, { kind, id }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not remove item');
       throw err;
@@ -503,9 +642,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshProject = useCallback(async () => {
-    if (testModeRef.current) return;
+    if (testModeRef.current || !projectRef.current.id) return;
     try {
-      setProject(await fetchProject());
+      setProject(await fetchProject(projectRef.current.id));
     } catch {
       // Keep the current snapshot; the next poll retries.
     }
@@ -514,6 +653,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<ProjectContextValue>(
     () => ({
       project,
+      projects,
+      activeProjectId,
       hydrated: hydrated && settingsHydrated,
       testMode,
       error,
@@ -523,18 +664,29 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       setDuration: (durationSec) => setProject((p) => ({ ...p, durationSec })),
       setTestMode,
       loadDemoProject,
+      startFresh,
+      startProject,
+      selectProject,
 
       resetProject: async () => {
         setError(null);
         const s = settingsRef.current;
         if (s.testMode) {
           persistReady.current = false;
-          setProject(createDemoProject());
+          const demo = createDemoProject();
+          setProject(demo);
+          setProjects([asSummary(demo)]);
+          setActiveProjectId(demo.id);
+          return;
+        }
+        const id = projectRef.current.id;
+        if (!id) {
+          startFresh();
           return;
         }
         try {
           persistReady.current = true;
-          setProject(await resetRemoteProject({ style: s.defaultStyle, durationSec: s.defaultDuration }));
+          setProject(await resetRemoteProject(id, { style: s.defaultStyle, durationSec: s.defaultDuration }));
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Could not reset project');
         }
@@ -542,13 +694,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
       generateCast: async () => {
         setError(null);
-        const p = projectRef.current;
-        const input = { idea: p.idea, style: p.style, durationSec: p.durationSec };
+        const named = await startProject();
+        const input = { idea: named.idea, style: named.style, durationSec: named.durationSec };
         if (testModeRef.current) {
           const result = await mockCast(input);
           setProject((prev) => ({
             ...prev,
-            title: result.title,
             styleNotes: result.styleNotes,
             people: result.people.map(withPendingImage),
             things: result.things.map(withPendingImage),
@@ -561,7 +712,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         }
         try {
           persistReady.current = true;
-          setProject(await createCast(input));
+          const next = await createCast(named.id, input);
+          adoptProject(next);
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Cast failed');
           throw err;
@@ -589,7 +741,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         try {
-          setProject(await createScenes());
+          setProject(await createScenes(projectRef.current.id));
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Scenes failed');
           throw err;
@@ -617,7 +769,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         try {
-          setProject(await createFrames());
+          setProject(await createFrames(projectRef.current.id));
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Frames failed');
           throw err;
@@ -669,12 +821,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         }
         try {
           setError(null);
-          setProject(await createVideo());
+          setProject(await createVideo(projectRef.current.id));
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Video failed';
           setError(message);
           try {
-            setProject(await fetchProject());
+            if (projectRef.current.id) setProject(await fetchProject(projectRef.current.id));
           } catch {
             // Keep the previous project; error is already set.
           }
@@ -684,12 +836,18 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       project,
+      projects,
+      activeProjectId,
       hydrated,
       settingsHydrated,
       testMode,
       error,
       setTestMode,
       loadDemoProject,
+      startFresh,
+      startProject,
+      selectProject,
+      adoptProject,
       generateImage,
       generatePersonImage,
       generateThingImage,
