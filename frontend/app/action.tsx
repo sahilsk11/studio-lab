@@ -2,10 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,23 +11,18 @@ import {
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
 import {
-  Body,
   Button,
   Callout,
   Caption,
-  Container,
   GlassCard,
   Mono,
   Screen,
-  Title,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
 import { confirm } from '@/lib/confirm';
 import type { Frame, Project } from '@/types/project';
-
-const PAGE_PAD = theme.space.xl;
 
 export default function ActionScreen() {
   const router = useRouter();
@@ -95,25 +88,17 @@ export default function ActionScreen() {
   }
 
   if (!hydrated || (drafting && frames.length === 0)) {
-    return (
-      <Screen currentStep="Action">
-        <View style={styles.loading}>
-          <ActivityIndicator color={theme.textSecondary} />
-          <Body>Writing the action as a beat sheet…</Body>
-        </View>
-      </Screen>
-    );
+    return <Screen currentStep="Action" loading />;
   }
 
   if (frames.length === 0) {
     return (
-      <Screen currentStep="Action">
-        <View style={styles.empty}>
-          <Title>No action yet</Title>
-          <Body>Draft a readable sequence from the cast and places you kept.</Body>
-          {error ? <Callout variant="error" title="Draft paused" message={error} /> : null}
-          <Button label="Draft the action" icon="sparkles" onPress={() => void draftAction()} />
-        </View>
+      <Screen
+        currentStep="Action"
+        title="No action yet"
+        subtitle="Draft a readable sequence from the cast and places you kept."
+        next={{ label: 'Draft the action', onPress: () => void draftAction() }}>
+        {error ? <Callout variant="error" title="Draft paused" message={error} /> : null}
       </Screen>
     );
   }
@@ -121,63 +106,44 @@ export default function ActionScreen() {
   return (
     <Screen
       currentStep="Action"
-      footer={
+      title="Here's what happens"
+      subtitle={`${frames.length} beats, ${project.durationSec} seconds. Tap any line to edit the action or camera direction.`}
+      stats={[
+        { label: 'Beats', value: String(frames.length) },
+        { label: 'Length', value: `${project.durationSec}s` },
+      ]}
+      extra={
         <Button
-          label="Looks right → Scenes"
-          iconRight="arrow-forward"
-          size="lg"
-          onPress={handleNext}
+          label="Rewrite all"
+          icon="refresh-outline"
+          size="sm"
+          variant="ghost"
+          inline
+          loading={rewriting}
+          onPress={() => void rewriteAll()}
         />
-      }>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={styles.stack}>
-          <View style={styles.headingRow}>
-            <View style={styles.headingCopy}>
-              <Title>Here&apos;s what happens</Title>
-              <Body>
-                {frames.length} beats, {project.durationSec} seconds. Tap any line to edit the action or camera direction.
-              </Body>
-            </View>
-            <Button
-              label="Rewrite all"
-              icon="refresh-outline"
-              size="sm"
-              variant="ghost"
-              inline
-              loading={rewriting}
-              onPress={() => void rewriteAll()}
+      }
+      next={{ label: 'Next: Scenes', onPress: handleNext }}>
+      <View style={styles.stack}>
+        <BeatRail frames={frames} keyIndex={keyIndex} />
+
+        {error ? <Callout variant="error" title="Action paused" message={error} /> : null}
+
+        <View style={styles.beatList}>
+          {frames.map((frame, index) => (
+            <BeatCard
+              key={frame.id}
+              frame={frame}
+              project={project}
+              index={index}
+              count={frames.length}
+              durationSec={project.durationSec}
+              isKey={index === keyIndex}
+              onPress={() => setEditing({ kind: 'frame', item: frame })}
             />
-          </View>
-
-          <BeatRail frames={frames} keyIndex={keyIndex} />
-
-          {error ? <Callout variant="error" title="Action paused" message={error} /> : null}
-
-          <View style={styles.beatList}>
-            {frames.map((frame, index) => (
-              <BeatCard
-                key={frame.id}
-                frame={frame}
-                project={project}
-                index={index}
-                count={frames.length}
-                durationSec={project.durationSec}
-                isKey={index === keyIndex}
-                onPress={() => setEditing({ kind: 'frame', item: frame })}
-              />
-            ))}
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Rewrite all action beats"
-            onPress={() => void rewriteAll()}
-            style={styles.rewriteLink}>
-            <Ionicons name="refresh-outline" size={14} color={theme.textTertiary} />
-            <Text style={styles.rewriteText}>Rewrite it all</Text>
-          </Pressable>
-        </Container>
-      </ScrollView>
+          ))}
+        </View>
+      </View>
 
       <ItemEditor
         target={editing}
@@ -280,24 +246,7 @@ function BeatCard({
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.space.md },
-  empty: {
-    flex: 1,
-    alignSelf: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    maxWidth: 420,
-    padding: PAGE_PAD,
-    gap: theme.space.lg,
-  },
-  scroll: {
-    paddingHorizontal: PAGE_PAD,
-    paddingTop: theme.space.sm,
-    paddingBottom: theme.space.xxl,
-  },
   stack: { gap: theme.space.xl },
-  headingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.lg },
-  headingCopy: { flex: 1, gap: theme.space.sm },
   beatRail: { flexDirection: 'row', height: 6, gap: 3 },
   beatRailSegment: { height: 6, borderRadius: theme.radius.pill },
   beatList: { gap: theme.space.md },
@@ -347,12 +296,4 @@ const styles = StyleSheet.create({
   },
   editHint: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 2 },
   editText: { color: theme.textTertiary, fontFamily: theme.font.sans, fontSize: 12 },
-  rewriteLink: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    padding: theme.space.md,
-  },
-  rewriteText: { color: theme.textTertiary, fontFamily: theme.font.sans, fontSize: 14 },
 });

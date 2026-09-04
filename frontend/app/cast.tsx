@@ -4,9 +4,6 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -14,7 +11,7 @@ import {
 } from 'react-native';
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
-import { Button, Container, Screen } from '@/components/ui';
+import { Button, Screen } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -82,68 +79,57 @@ export default function CastScreen() {
   }
 
   if (!hydrated || empty) {
-    return (
-      <Screen currentStep="Cast">
-        <View style={styles.loading}>
-          <ActivityIndicator color={theme.textSecondary} />
-        </View>
-      </Screen>
-    );
+    return <Screen currentStep="Cast" loading />;
   }
 
   return (
     <Screen
       currentStep="Cast"
-      footer={
-        <Button
-          label="Next: Places"
-          iconRight="arrow-forward"
-          size="lg"
-          inline
-          loading={advancing}
-          disabled={advancing}
-          onPress={() => void openPlaces()}
-        />
-      }>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={styles.container}>
-          <View style={styles.heading}>
-            <Text style={styles.title}>Meet the cast</Text>
-            <Text style={styles.subtitle}>Keep the ones you want, or edit any card before moving on.</Text>
-          </View>
+      title="Meet the cast"
+      subtitle="Keep the ones you want, or edit any card before moving on."
+      stats={[
+        { label: 'Cast', value: String(people.length) },
+        { label: 'Objects', value: String(objects.length) },
+        { label: 'Look', value: project.style },
+      ]}
+      next={{
+        label: 'Next: Places',
+        onPress: () => void openPlaces(),
+        loading: advancing,
+        disabled: advancing,
+      }}>
+      {error ? (
+        <View style={styles.errorBox}>
+          <Ionicons name="warning-outline" size={15} color={theme.danger} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
 
-          {error ? (
-            <View style={styles.errorBox}>
-              <Ionicons name="warning-outline" size={15} color={theme.danger} />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
+      <View style={styles.stack}>
+        {people.length > 0 ? (
+          <CastSection
+            title="Cast"
+            selections={people}
+            kept={kept}
+            compact={compact}
+            keyFor={keyFor}
+            onKeep={toggleKeep}
+            onEdit={setEditing}
+          />
+        ) : null}
 
-          {people.length > 0 ? (
-            <CastSection
-              title="Cast"
-              selections={people}
-              kept={kept}
-              compact={compact}
-              keyFor={keyFor}
-              onKeep={toggleKeep}
-              onEdit={setEditing}
-            />
-          ) : null}
-
-          {objects.length > 0 ? (
-            <CastSection
-              title="Objects"
-              selections={objects}
-              kept={kept}
-              compact={compact}
-              keyFor={keyFor}
-              onKeep={toggleKeep}
-              onEdit={setEditing}
-            />
-          ) : null}
-        </Container>
-      </ScrollView>
+        {objects.length > 0 ? (
+          <CastSection
+            title="Objects"
+            selections={objects}
+            kept={kept}
+            compact={compact}
+            keyFor={keyFor}
+            onKeep={toggleKeep}
+            onEdit={setEditing}
+          />
+        ) : null}
+      </View>
 
       <ItemEditor
         target={editing}
@@ -241,8 +227,15 @@ function CastCard({
       </View>
 
       <View style={styles.cardActions}>
-        <MiniAction label={kept ? 'Kept' : 'Keep'} primary={!kept} onPress={onKeep} />
-        <MiniAction label="Edit" onPress={onEdit} />
+        <Button
+          label={kept ? 'Kept' : 'Keep'}
+          icon={kept ? 'checkmark' : undefined}
+          size="sm"
+          variant={kept ? 'secondary' : 'primary'}
+          onPress={onKeep}
+          style={styles.flex}
+        />
+        <Button label="Edit" size="sm" variant="secondary" onPress={onEdit} />
       </View>
     </View>
   );
@@ -265,58 +258,9 @@ function PatternPreview({ status }: { status: Person['imageStatus'] }) {
   );
 }
 
-function MiniAction({
-  label,
-  primary,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  primary?: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.miniAction,
-        primary && styles.miniActionPrimary,
-        disabled && styles.miniActionDisabled,
-        pressed && styles.pressed,
-      ]}>
-      <Text style={[styles.miniActionText, primary && styles.miniActionTextPrimary]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: {
-    paddingHorizontal: theme.space.xl,
-    paddingTop: theme.space.sm,
-    paddingBottom: theme.space.xxxl,
-  },
-  container: { maxWidth: 1120, gap: theme.space.xl },
-  heading: { gap: 5 },
-  title: {
-    color: theme.text,
-    fontFamily: theme.font.sans,
-    fontSize: 29,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    lineHeight: 34,
-  },
-  subtitle: {
-    maxWidth: 680,
-    color: theme.textSecondary,
-    fontFamily: theme.font.sans,
-    fontSize: 14,
-    lineHeight: 21,
-  },
+  flex: { flex: 1 },
+  stack: { gap: theme.space.xl },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -396,29 +340,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.space.md,
     paddingBottom: theme.space.md,
   },
-  miniAction: {
-    flex: 1,
-    minHeight: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: 7,
-    backgroundColor: theme.bgElevated,
-    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
-  },
-  miniActionPrimary: { backgroundColor: theme.accent, borderColor: theme.accent },
-  miniActionDisabled: { opacity: 0.45 },
-  miniActionText: {
-    color: theme.textSecondary,
-    fontFamily: theme.font.sans,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  miniActionTextPrimary: { color: theme.surface },
   pattern: { flex: 1, backgroundColor: theme.surfaceMuted },
   patternLabel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
   patternText: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 10 },
-  pressed: { opacity: 0.65 },
 });

@@ -13,7 +13,7 @@ import {
 import { theme } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'ink';
 type Size = 'sm' | 'md' | 'lg';
 
 type Props = {
@@ -51,7 +51,7 @@ export function Button({
   const metrics = SIZES[size];
   const isDisabled = disabled || loading;
   const foreground =
-    variant === 'primary'
+    variant === 'primary' || variant === 'ink'
       ? '#FFFFFF'
       : variant === 'danger'
         ? theme.danger
@@ -91,7 +91,7 @@ export function Button({
                 {
                   color: foreground,
                   fontSize: metrics.font,
-                  fontWeight: variant === 'primary' ? '700' : '600',
+                  fontWeight: variant === 'primary' || variant === 'ink' ? '700' : '600',
                 },
               ]}>
               {label}
@@ -168,6 +168,10 @@ const styles = StyleSheet.create({
   danger: {
     backgroundColor: theme.dangerDim,
     borderColor: '#E8BDB7',
+  },
+  ink: {
+    backgroundColor: theme.text,
+    borderColor: theme.text,
   },
   pressed: {
     opacity: 0.78,

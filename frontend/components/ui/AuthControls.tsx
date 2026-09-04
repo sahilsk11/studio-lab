@@ -1,9 +1,12 @@
 import { useAuth, useClerk, useUser } from '@clerk/clerk-react';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { usePathname, useRouter } from 'expo-router';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/constants/theme';
+import { useSettings } from '@/context/SettingsContext';
 import { clerkAppearance } from '@/lib/clerk-appearance';
+import { Button } from './Button';
 
 export const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim() ?? '';
 
@@ -11,58 +14,97 @@ export function isClerkEnabled(): boolean {
   return Boolean(CLERK_PUBLISHABLE_KEY);
 }
 
-/** Sidebar row — sign in or signed-in account. */
-export function SidebarAuth({
-  style,
-  labelStyle,
-}: {
-  style?: StyleProp<ViewStyle>;
-  labelStyle?: StyleProp<TextStyle>;
-}) {
-  if (!isClerkEnabled()) return null;
-  return <SidebarClerkAuth style={style} labelStyle={labelStyle} />;
+/** Account + settings in a single footer row. */
+export function SidebarFooter({ labeledSettings = false }: { labeledSettings?: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { tap } = useSettings();
+  const onSettings = pathname === '/settings';
+
+  function openSettings() {
+    tap('light');
+    router.push('/settings');
+  }
+
+  const settingsButton = labeledSettings ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: onSettings }}
+      accessibilityLabel="Settings"
+      onPress={openSettings}
+      style={({ pressed }) => [styles.settingsChip, onSettings && styles.settingsChipActive, pressed && styles.pressed]}>
+      <Text style={styles.settingsChipLabel}>Settings</Text>
+    </Pressable>
+  ) : (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: onSettings }}
+      accessibilityLabel="Settings"
+      onPress={openSettings}
+      style={({ pressed }) => [styles.gear, onSettings && styles.gearActive, pressed && styles.pressed]}>
+      <Ionicons name="settings-outline" size={16} color={theme.textSecondary} />
+    </Pressable>
+  );
+
+  if (!isClerkEnabled()) {
+    return (
+      <View style={styles.row}>
+        <View style={styles.grow} />
+        {settingsButton}
+      </View>
+    );
+  }
+
+  return <ClerkFooter settingsButton={settingsButton} />;
 }
 
-function SidebarClerkAuth({
-  style,
-  labelStyle,
-}: {
-  style?: StyleProp<ViewStyle>;
-  labelStyle?: StyleProp<TextStyle>;
-}) {
+function ClerkFooter({ settingsButton }: { settingsButton: React.ReactNode }) {
   const clerk = useClerk();
   const { isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
 
   if (!isLoaded) {
-    return <View style={[styles.row, style, styles.placeholder]} />;
+    return <View style={[styles.account, styles.placeholder]} />;
   }
 
   if (isSignedIn) {
-    const label = user?.firstName || user?.primaryEmailAddress?.emailAddress || 'Account';
+    const name = user?.firstName || user?.primaryEmailAddress?.emailAddress || 'Account';
+    const initial = name.trim().charAt(0).toUpperCase() || 'A';
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Account"
-        onPress={() => clerk.openUserProfile({ appearance: clerkAppearance })}
-        style={({ pressed }) => [styles.row, style, pressed && styles.pressed]}>
-        <Ionicons name="person-circle-outline" size={17} color={theme.textSecondary} />
-        <Text numberOfLines={1} style={[styles.label, labelStyle]}>
-          {label}
-        </Text>
-      </Pressable>
+      <View style={styles.account}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Account"
+          onPress={() => clerk.openUserProfile({ appearance: clerkAppearance })}
+          style={({ pressed }) => [styles.accountMain, pressed && styles.pressed]}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+          <View style={styles.accountCopy}>
+            <Text numberOfLines={1} style={styles.accountName}>
+              {name}
+            </Text>
+            <Text numberOfLines={1} style={styles.accountMeta}>
+              signed in
+            </Text>
+          </View>
+        </Pressable>
+        {settingsButton}
+      </View>
     );
   }
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Sign in"
-      onPress={() => clerk.openSignIn({ appearance: clerkAppearance })}
-      style={({ pressed }) => [styles.row, style, pressed && styles.pressed]}>
-      <Ionicons name="person-outline" size={17} color={theme.textSecondary} />
-      <Text style={[styles.label, labelStyle]}>Sign in</Text>
-    </Pressable>
+    <View style={styles.row}>
+      <Button
+        label="Sign in to save"
+        variant="ink"
+        size="sm"
+        onPress={() => clerk.openSignIn({ appearance: clerkAppearance })}
+        style={styles.signIn}
+      />
+      {settingsButton}
+    </View>
   );
 }
 
@@ -71,22 +113,86 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    minHeight: 32,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: theme.radius.sm,
-    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  label: {
+  grow: { flex: 1 },
+  signIn: { flex: 1 },
+  account: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 44,
+    paddingLeft: 8,
+    paddingRight: 6,
+    paddingVertical: 6,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  accountMain: {
     flex: 1,
     minWidth: 0,
-    color: theme.textSecondary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
+  },
+  accountCopy: { flex: 1, minWidth: 0, gap: 1 },
+  accountName: {
+    color: theme.text,
     fontFamily: theme.font.sans,
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '700',
   },
-  placeholder: {
-    opacity: 0,
+  accountMeta: {
+    color: theme.textTertiary,
+    fontFamily: theme.font.sans,
+    fontSize: 11,
   },
-  pressed: { opacity: 0.64 },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.info,
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontFamily: theme.font.sans,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  gear: {
+    width: 34,
+    height: 34,
+    borderRadius: theme.radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
+  },
+  gearActive: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
+  settingsChip: {
+    minHeight: 34,
+    paddingHorizontal: 12,
+    borderRadius: theme.radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
+  },
+  settingsChipActive: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
+  settingsChipLabel: {
+    color: theme.text,
+    fontFamily: theme.font.sans,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  placeholder: { opacity: 0 },
+  pressed: { opacity: 0.7 },
 });

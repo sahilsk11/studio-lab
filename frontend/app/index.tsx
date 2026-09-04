@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -14,12 +13,11 @@ import {
   View,
 } from 'react-native';
 
-import { Button, Container, Screen } from '@/components/ui';
+import { Container, Screen } from '@/components/ui';
 import { STYLE_ICONS, STYLE_TINTS } from '@/constants/style-icons';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
-import { useSidebar } from '@/context/SidebarContext';
 import { DURATIONS, STYLES } from '@/types/project';
 
 const shortcutLabel =
@@ -44,7 +42,6 @@ export default function IdeaScreen() {
     startProject,
   } = useProject();
   const { settings, tap } = useSettings();
-  const { markNavigated } = useSidebar();
   const [skipping, setSkipping] = useState(false);
   const [starting, setStarting] = useState(false);
 
@@ -63,7 +60,6 @@ export default function IdeaScreen() {
     try {
       await startProject();
       tap('success');
-      markNavigated();
       router.push('/interview' as never);
     } catch {
       // Error is already on project context.
@@ -78,7 +74,6 @@ export default function IdeaScreen() {
     try {
       await generateCast({ replace: true });
       tap('success');
-      markNavigated();
       router.push('/cast');
       if (settings.autoGenerateImages) void generateAllCastImages();
     } finally {
@@ -86,204 +81,143 @@ export default function IdeaScreen() {
     }
   }
 
-  if (!hydrated) {
-    return (
-      <Screen currentStep="Idea">
-        <View style={styles.loading}>
-          <ActivityIndicator color={theme.textSecondary} />
-        </View>
-      </Screen>
-    );
-  }
-
   return (
-    <Screen currentStep="Idea">
-      <KeyboardAvoidingView
-        style={styles.fill}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={[styles.scroll, compact && styles.scrollCompact]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
-          <Container style={styles.container}>
-            <View style={styles.intro}>
-              <Text style={[styles.title, compact && styles.titleCompact]}>
-                What&apos;s the video?
-              </Text>
-              <Text style={styles.subtitle}>
-                A sentence is enough. Next I&apos;ll ask four multiple-choice questions,
-                then start drawing.
-              </Text>
+    <Screen
+      currentStep="Idea"
+      loading={!hydrated}
+      keyboard
+      title="What's the video?"
+      subtitle="A sentence is enough. Next I'll ask four multiple-choice questions, then start drawing."
+      next={{
+        label: 'Start',
+        onPress: () => void begin(),
+        disabled: !canStart || skipping || starting,
+        loading: starting,
+        hint: compact ? undefined : '4 questions, ~30 seconds',
+      }}
+      extra={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canStart || skipping || starting, busy: skipping }}
+          disabled={!canStart || skipping || starting}
+          onPress={() => void skipInterview()}
+          style={({ pressed }) => [styles.skip, pressed && styles.pressed]}>
+          {skipping ? (
+            <ActivityIndicator size="small" color={theme.textSecondary} />
+          ) : (
+            <Text style={[styles.skipText, !canStart && styles.disabledText]}>
+              Skip questions, just make it
+            </Text>
+          )}
+        </Pressable>
+      }>
+      <Container style={styles.container}>
+        <View style={styles.promptCard}>
+          <TextInput
+            accessibilityLabel="Describe your video"
+            multiline
+            value={project.idea}
+            onChangeText={setIdea}
+            onKeyPress={(event) => {
+              const keyEvent = event.nativeEvent as typeof event.nativeEvent & {
+                metaKey?: boolean;
+                ctrlKey?: boolean;
+              };
+              if (
+                Platform.OS === 'web' &&
+                keyEvent.key === 'Enter' &&
+                (keyEvent.metaKey || keyEvent.ctrlKey) &&
+                canStart &&
+                !starting &&
+                !skipping
+              ) {
+                void begin();
+              }
+            }}
+            placeholder="A courier is late for a delivery and takes a shortcut off a balcony…"
+            placeholderTextColor={theme.textTertiary}
+            selectionColor={theme.accent}
+            textAlignVertical="top"
+            style={[styles.prompt, compact && styles.promptCompact]}
+          />
+          <View style={styles.promptMeta}>
+            <Text style={styles.mono}>9:16 · vertical</Text>
+            <View style={styles.metaRule} />
+            <View style={styles.durationRow}>
+              {DURATIONS.map((duration) => {
+                const selected = project.durationSec === duration;
+                return (
+                  <Pressable
+                    key={duration}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => {
+                      tap('light');
+                      setDuration(duration);
+                    }}
+                    style={[styles.duration, selected && styles.durationSelected]}>
+                    <Text style={[styles.durationText, selected && styles.durationTextSelected]}>
+                      {duration}s
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
+            {!compact ? <Text style={styles.shortcut}>{shortcutLabel}</Text> : null}
+          </View>
+        </View>
 
-            <View style={styles.promptCard}>
-              <TextInput
-                accessibilityLabel="Describe your video"
-                multiline
-                value={project.idea}
-                onChangeText={setIdea}
-                onKeyPress={(event) => {
-                  const keyEvent = event.nativeEvent as typeof event.nativeEvent & {
-                    metaKey?: boolean;
-                    ctrlKey?: boolean;
-                  };
-                  if (
-                    Platform.OS === 'web' &&
-                    keyEvent.key === 'Enter' &&
-                    (keyEvent.metaKey || keyEvent.ctrlKey) &&
-                    canStart &&
-                    !starting &&
-                    !skipping
-                  ) {
-                    void begin();
-                  }
-                }}
-                placeholder="A courier is late for a delivery and takes a shortcut off a balcony…"
-                placeholderTextColor={theme.textTertiary}
-                selectionColor={theme.accent}
-                textAlignVertical="top"
-                style={[styles.prompt, compact && styles.promptCompact]}
-              />
-              <View style={styles.promptMeta}>
-                <Text style={styles.mono}>9:16 · vertical</Text>
-                <View style={styles.metaRule} />
-                <View style={styles.durationRow}>
-                  {DURATIONS.map((duration) => {
-                    const selected = project.durationSec === duration;
-                    return (
-                      <Pressable
-                        key={duration}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        onPress={() => {
-                          tap('light');
-                          setDuration(duration);
-                        }}
-                        style={[styles.duration, selected && styles.durationSelected]}>
-                        <Text
-                          style={[
-                            styles.durationText,
-                            selected && styles.durationTextSelected,
-                          ]}>
-                          {duration}s
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {!compact ? <Text style={styles.shortcut}>{shortcutLabel}</Text> : null}
-              </View>
-            </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-
-            <View style={styles.lookSection}>
-              <View style={styles.lookHeading}>
-                <Text style={styles.eyebrow}>LOOK</Text>
-                <Text style={styles.lookHint}>— pick one, change it later</Text>
-              </View>
-              <ScrollView
-                horizontal={compact}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[styles.lookRow, !compact && styles.lookGrid]}>
-                {STYLES.map((look) => {
-                  const selected = project.style === look;
-                  const tint = STYLE_TINTS[look];
-                  return (
-                    <Pressable
-                      key={look}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      onPress={() => {
-                        tap('light');
-                        setStyle(look);
-                      }}
-                      style={[
-                        styles.lookCard,
-                        !compact && styles.lookCardWide,
-                        selected && styles.lookCardSelected,
-                      ]}>
-                      <View style={[styles.lookArt, { backgroundColor: `${tint}14` }]}>
-                        <Ionicons name={STYLE_ICONS[look]} size={28} color={tint} />
-                      </View>
-                      <Text style={[styles.lookLabel, selected && styles.lookLabelSelected]}>
-                        {look}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            <View style={[styles.actions, compact && styles.actionsCompact]}>
-              <View style={styles.startGroup}>
-                <Button
-                  label="Start"
-                  size="lg"
-                  inline={!compact}
-                  disabled={!canStart || skipping || starting}
-                  loading={starting}
-                  onPress={() => void begin()}
-                />
-                {!compact ? <Text style={styles.actionHint}>4 questions, ~30 seconds</Text> : null}
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canStart || skipping || starting, busy: skipping }}
-                disabled={!canStart || skipping || starting}
-                onPress={() => void skipInterview()}
-                style={({ pressed }) => [styles.skip, pressed && styles.pressed]}>
-                {skipping ? (
-                  <ActivityIndicator size="small" color={theme.textSecondary} />
-                ) : (
-                  <Text style={[styles.skipText, !canStart && styles.disabledText]}>
-                    Skip questions, just make it
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-          </Container>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <View style={styles.lookSection}>
+          <View style={styles.lookHeading}>
+            <Text style={styles.eyebrow}>LOOK</Text>
+            <Text style={styles.lookHint}>— pick one, change it later</Text>
+          </View>
+          <ScrollView
+            horizontal={compact}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.lookRow, !compact && styles.lookGrid]}>
+            {STYLES.map((look) => {
+              const selected = project.style === look;
+              const tint = STYLE_TINTS[look];
+              return (
+                <Pressable
+                  key={look}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    tap('light');
+                    setStyle(look);
+                  }}
+                  style={[
+                    styles.lookCard,
+                    !compact && styles.lookCardWide,
+                    selected && styles.lookCardSelected,
+                  ]}>
+                  <View style={[styles.lookArt, { backgroundColor: `${tint}14` }]}>
+                    <Ionicons name={STYLE_ICONS[look]} size={28} color={tint} />
+                  </View>
+                  <Text style={[styles.lookLabel, selected && styles.lookLabelSelected]}>{look}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Container>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: theme.space.xl,
-    paddingVertical: theme.space.xxxl,
-  },
-  scrollCompact: { justifyContent: 'flex-start', paddingVertical: theme.space.xl },
-  container: { maxWidth: 720, gap: 26 },
-  intro: { gap: theme.space.sm },
-  title: {
-    color: theme.text,
-    fontFamily: theme.font.sans,
-    fontSize: 40,
-    fontWeight: '800',
-    letterSpacing: -1.4,
-    lineHeight: 43,
-  },
-  titleCompact: { fontSize: 34, lineHeight: 37 },
-  subtitle: {
-    maxWidth: 640,
-    color: theme.textSecondary,
-    fontFamily: theme.font.sans,
-    fontSize: 15,
-    lineHeight: 22,
-  },
+  container: { maxWidth: 720, gap: 22 },
   promptCard: {
     backgroundColor: theme.bgElevated,
     borderColor: theme.borderStrong,
     borderWidth: 1,
     borderBottomColor: theme.accent,
     borderBottomWidth: 2,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.md,
     paddingHorizontal: theme.space.lg,
     paddingTop: theme.space.md,
     paddingBottom: theme.space.md,
@@ -338,7 +272,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bgElevated,
     borderColor: theme.borderStrong,
     borderWidth: 1,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.md,
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
   lookCardWide: { flex: 1, width: undefined },
@@ -363,10 +297,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
   },
   lookLabelSelected: { color: theme.text, fontWeight: '700' },
-  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
-  actionsCompact: { flexDirection: 'column', alignItems: 'stretch' },
-  startGroup: { flexDirection: 'row', alignItems: 'center', gap: theme.space.lg },
-  actionHint: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 13.5 },
   skip: {
     minHeight: 40,
     alignItems: 'center',

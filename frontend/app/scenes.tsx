@@ -2,35 +2,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
 import {
-  Body,
   Button,
   Callout,
   Caption,
   CaptionStrong,
-  Container,
-  CONTENT_MAX_WIDTH,
   GlassCard,
   Mono,
   ProgressRail,
   Screen,
-  SIDEBAR_WIDTH,
   Shimmer,
   StatusBadge,
-  Title,
-  useDesktopLayout,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
@@ -39,13 +30,8 @@ import { useContinueAfterSignIn } from '@/components/ui/SignInGate';
 import { imageProgress } from '@/lib/project';
 import type { Frame, Project } from '@/types/project';
 
-const PAGE_PAD = theme.space.xl;
-const GAP = theme.space.md;
-
 export default function ScenesReviewScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const desktop = useDesktopLayout();
   const {
     project,
     hydrated,
@@ -70,12 +56,6 @@ export default function ScenesReviewScreen() {
     [project.frames],
   );
   const selected = frames.find((frame) => frame.id === selectedId) ?? frames[0];
-  const contentWidth = Math.max(
-    280,
-    Math.min((desktop ? width - SIDEBAR_WIDTH : width) - PAGE_PAD * 2, CONTENT_MAX_WIDTH),
-  );
-  const columns = contentWidth >= 840 ? 5 : contentWidth >= 680 ? 4 : contentWidth >= 470 ? 3 : 2;
-  const cardWidth = (contentWidth - GAP * (columns - 1)) / columns;
   const progress = imageProgress(frames);
   const outstanding = progress.pending + progress.stale + progress.errors;
   const rendering = progress.generating > 0;
@@ -87,133 +67,120 @@ export default function ScenesReviewScreen() {
   }, [hydrated, project.frames.length, router]);
 
   if (!hydrated || project.frames.length === 0) {
-    return (
-      <Screen currentStep="Scenes">
-        <View style={styles.loading}>
-          <ActivityIndicator color={theme.textSecondary} />
-        </View>
-      </Screen>
-    );
+    return <Screen currentStep="Scenes" loading />;
   }
+
+  const nextAction =
+    outstanding > 0 || rendering
+      ? {
+          label: rendering
+            ? `Rendering ${progress.generating}…`
+            : `Render ${outstanding} scene${outstanding === 1 ? '' : 's'}`,
+          onPress: () => void generateAllFrameImages(),
+          loading: rendering && outstanding === 0,
+          disabled: rendering && outstanding === 0,
+        }
+      : {
+          label: needsSignIn ? 'Sign in to generate video' : 'Generate video',
+          onPress: continueOrSignIn,
+          loading: !authReady && !settings.testMode,
+          disabled: (!allReady && !needsSignIn) || (!authReady && !settings.testMode),
+        };
 
   return (
     <Screen
       currentStep="Scenes"
-      footer={
-        outstanding > 0 || rendering ? (
-          <Button
-            label={rendering ? `Rendering ${progress.generating}…` : `Render ${outstanding} scene${outstanding === 1 ? '' : 's'}`}
-            icon="sparkles"
-            size="lg"
-            loading={rendering && outstanding === 0}
-            disabled={rendering && outstanding === 0}
-            onPress={() => void generateAllFrameImages()}
-          />
-        ) : (
-          <Button
-            label={needsSignIn ? 'Sign in to generate video' : 'Generate video'}
-            icon={needsSignIn ? 'log-in-outline' : 'play'}
-            size="lg"
-            loading={!authReady && !settings.testMode}
-            disabled={(!allReady && !needsSignIn) || (!authReady && !settings.testMode)}
-            onPress={continueOrSignIn}
-          />
-        )
-      }>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={styles.stack}>
-          <View style={styles.headingRow}>
-            <View style={styles.headingCopy}>
-              <Title>The moments that matter</Title>
-              <Body>
-                Review the whole cut at once. These 9:16 stills anchor the motion and continuity between beats.
-              </Body>
-            </View>
-            {settings.showCosts ? <Mono>${project.totalCost.toFixed(2)}</Mono> : null}
+      title="The moments that matter"
+      subtitle="Review the whole cut at once. These 9:16 stills anchor the motion and continuity between beats."
+      stats={[
+        { label: 'Scenes', value: `${progress.done}/${progress.total}` },
+        { label: 'Look', value: project.style },
+        ...(settings.showCosts ? [{ label: 'Cost', value: `$${project.totalCost.toFixed(2)}` }] : []),
+      ]}
+      next={nextAction}>
+      <View style={styles.stack}>
+        <View style={styles.progressBlock}>
+          <View style={styles.progressHeader}>
+            <CaptionStrong>Key scenes</CaptionStrong>
+            <Mono>
+              {progress.done}/{progress.total}
+            </Mono>
           </View>
+          <ProgressRail value={progress.done} total={progress.total} />
+        </View>
 
-          <View style={styles.progressBlock}>
-            <View style={styles.progressHeader}>
-              <CaptionStrong>Key scenes</CaptionStrong>
-              <Mono>{progress.done}/{progress.total}</Mono>
+        {error ? <Callout variant="error" title="Scene rendering paused" message={error} /> : null}
+
+        <View style={styles.grid}>
+          {frames.map((frame, index) => (
+            <SceneFrameCard
+              key={frame.id}
+              frame={frame}
+              project={project}
+              index={index}
+              selected={frame.id === selected?.id}
+              onPress={() => {
+                tap('light');
+                setSelectedId(frame.id);
+              }}
+            />
+          ))}
+        </View>
+
+        {selected ? (
+          <GlassCard tone="raised" radius={theme.radius.lg}>
+            <View style={styles.continuityPanel}>
+              <View style={styles.continuityIcon}>
+                <Ionicons name="git-compare-outline" size={18} color={theme.textSecondary} />
+              </View>
+              <View style={styles.continuityCopy}>
+                <Mono>SELECTED · FRAME {String(selected.order).padStart(2, '0')}</Mono>
+                <CaptionStrong numberOfLines={2}>{selected.action}</CaptionStrong>
+                <Caption numberOfLines={2}>{selected.camera}</Caption>
+              </View>
+              <View style={styles.continuityActions}>
+                <Button
+                  label="Edit"
+                  icon="create-outline"
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => setEditing({ kind: 'frame', item: selected })}
+                  style={styles.actionFlex}
+                />
+                <Button
+                  label="Try another"
+                  icon="refresh-outline"
+                  size="sm"
+                  variant="ghost"
+                  loading={selected.imageStatus === 'generating'}
+                  onPress={() => void generateFrameImage(selected.id)}
+                  style={styles.actionFlex}
+                />
+              </View>
             </View>
-            <ProgressRail value={progress.done} total={progress.total} />
-          </View>
+          </GlassCard>
+        ) : null}
 
-          {error ? <Callout variant="error" title="Scene rendering paused" message={error} /> : null}
-
-          <View style={[styles.grid, { gap: GAP }]}>
+        <View style={styles.timelineRow}>
+          <Mono>TIMELINE</Mono>
+          <View style={styles.timelineSegments}>
             {frames.map((frame, index) => (
-              <SceneFrameCard
+              <View
                 key={frame.id}
-                frame={frame}
-                project={project}
-                index={index}
-                width={cardWidth}
-                selected={frame.id === selected?.id}
-                onPress={() => {
-                  tap('light');
-                  setSelectedId(frame.id);
-                }}
+                style={[
+                  styles.timelineSegment,
+                  frame.imageStatus === 'done' && !frame.imageStale
+                    ? styles.timelineDone
+                    : frame.imageStatus === 'generating'
+                      ? styles.timelineRendering
+                      : null,
+                  { flex: index === Math.floor(frames.length / 2) ? 0.7 : 1 },
+                ]}
               />
             ))}
           </View>
-
-          {selected ? (
-            <GlassCard tone="raised" radius={theme.radius.lg}>
-              <View style={styles.continuityPanel}>
-                <View style={styles.continuityIcon}>
-                  <Ionicons name="git-compare-outline" size={18} color={theme.textSecondary} />
-                </View>
-                <View style={styles.continuityCopy}>
-                  <Mono>SELECTED · FRAME {String(selected.order).padStart(2, '0')}</Mono>
-                  <CaptionStrong numberOfLines={2}>{selected.action}</CaptionStrong>
-                  <Caption numberOfLines={2}>{selected.camera}</Caption>
-                </View>
-                <View style={styles.continuityActions}>
-                  <Button
-                    label="Edit"
-                    icon="create-outline"
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => setEditing({ kind: 'frame', item: selected })}
-                    style={styles.actionFlex}
-                  />
-                  <Button
-                    label="Try another"
-                    icon="refresh-outline"
-                    size="sm"
-                    variant="ghost"
-                    loading={selected.imageStatus === 'generating'}
-                    onPress={() => void generateFrameImage(selected.id)}
-                    style={styles.actionFlex}
-                  />
-                </View>
-              </View>
-            </GlassCard>
-          ) : null}
-
-          <View style={styles.timelineRow}>
-            <Mono>TIMELINE</Mono>
-            <View style={styles.timelineSegments}>
-              {frames.map((frame, index) => (
-                <View
-                  key={frame.id}
-                  style={[
-                    styles.timelineSegment,
-                    frame.imageStatus === 'done' && !frame.imageStale
-                      ? styles.timelineDone
-                      : frame.imageStatus === 'generating'
-                        ? styles.timelineRendering
-                        : null,
-                    { flex: index === Math.floor(frames.length / 2) ? 0.7 : 1 },
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-        </Container>
-      </ScrollView>
+        </View>
+      </View>
 
       <ItemEditor
         target={editing}
@@ -230,14 +197,12 @@ function SceneFrameCard({
   frame,
   project,
   index,
-  width,
   selected,
   onPress,
 }: {
   frame: Frame;
   project: Project;
   index: number;
-  width: number;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -252,7 +217,6 @@ function SceneFrameCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.cardPressable,
-        { width },
         selected && styles.cardSelected,
         pressed && styles.pressed,
       ]}>
@@ -293,20 +257,15 @@ function SceneFrameCard({
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: {
-    paddingHorizontal: PAGE_PAD,
-    paddingTop: theme.space.sm,
-    paddingBottom: theme.space.xxl,
-  },
   stack: { gap: theme.space.xl },
-  headingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.lg },
-  headingCopy: { flex: 1, gap: theme.space.sm },
   progressBlock: { gap: theme.space.sm },
   progressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.md },
   cardPressable: {
     overflow: 'hidden',
+    flexGrow: 1,
+    flexBasis: 150,
+    maxWidth: 220,
     borderRadius: theme.radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.borderStrong,
