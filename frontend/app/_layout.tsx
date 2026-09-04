@@ -1,7 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import { ClerkProvider } from '@clerk/clerk-react';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ApiAuthBridge } from '@/components/ApiAuthBridge';
@@ -16,10 +20,27 @@ import { getAnonymousSessionId } from '@/lib/session';
 
 export { ErrorBoundary } from 'expo-router';
 
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 // Register before ProjectProvider's first API call (child useEffects run too late).
 setAnonymousSessionGetter(() => getAnonymousSessionId());
 
 function AppShell() {
+  const [fontsLoaded, fontError] = useFonts(Ionicons.font);
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg }}>
+        <ActivityIndicator color={theme.textSecondary} />
+      </View>
+    );
+  }
   return (
     <SettingsProvider>
       <AuthStateProvider>

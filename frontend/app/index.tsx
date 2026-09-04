@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -14,18 +15,18 @@ import {
 } from 'react-native';
 
 import { AppHeader, Button, Container, Screen } from '@/components/ui';
+import { STYLE_ICONS, STYLE_TINTS } from '@/constants/style-icons';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
 import { DURATIONS, STYLES } from '@/types/project';
 
-const LOOK_COLORS = [
-  ['#E7CDC5', '#F4E6DF'],
-  ['#C9E5E5', '#E7F2EF'],
-  ['#DDD2E9', '#F1E9F5'],
-  ['#D9E3C3', '#EFF2E3'],
-  ['#DED8CE', '#F1EDE5'],
-] as const;
+const shortcutLabel =
+  Platform.OS === 'web' &&
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+    ? 'Cmd+Enter to start'
+    : 'Ctrl+Enter to start';
 
 export default function IdeaScreen() {
   const router = useRouter();
@@ -166,7 +167,7 @@ export default function IdeaScreen() {
                     );
                   })}
                 </View>
-                {!compact ? <Text style={styles.shortcut}>⌘↵ to start</Text> : null}
+                {!compact ? <Text style={styles.shortcut}>{shortcutLabel}</Text> : null}
               </View>
             </View>
 
@@ -181,8 +182,9 @@ export default function IdeaScreen() {
                 horizontal={compact}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={[styles.lookRow, !compact && styles.lookGrid]}>
-                {STYLES.map((look, index) => {
+                {STYLES.map((look) => {
                   const selected = project.style === look;
+                  const tint = STYLE_TINTS[look];
                   return (
                     <Pressable
                       key={look}
@@ -197,19 +199,8 @@ export default function IdeaScreen() {
                         !compact && styles.lookCardWide,
                         selected && styles.lookCardSelected,
                       ]}>
-                      <View style={[styles.lookArt, { backgroundColor: LOOK_COLORS[index][1] }]}>
-                        {Array.from({ length: 8 }).map((_, stripe) => (
-                          <View
-                            key={stripe}
-                            style={[
-                              styles.stripe,
-                              {
-                                left: stripe * 30 - 42,
-                                backgroundColor: LOOK_COLORS[index][0],
-                              },
-                            ]}
-                          />
-                        ))}
+                      <View style={[styles.lookArt, { backgroundColor: `${tint}14` }]}>
+                        <Ionicons name={STYLE_ICONS[look]} size={28} color={tint} />
                       </View>
                       <Text style={[styles.lookLabel, selected && styles.lookLabelSelected]}>
                         {look}
@@ -355,13 +346,10 @@ const styles = StyleSheet.create({
       default: { shadowColor: theme.accent, shadowOpacity: 0.16, shadowRadius: 8 },
     }),
   },
-  lookArt: { height: 90, overflow: 'hidden' },
-  stripe: {
-    position: 'absolute',
-    top: -35,
-    width: 14,
-    height: 175,
-    transform: [{ rotate: '45deg' }],
+  lookArt: {
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   lookLabel: {
     paddingHorizontal: 10,

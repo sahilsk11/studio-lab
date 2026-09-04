@@ -178,9 +178,7 @@ const styles = StyleSheet.create({
   iconButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
+    backgroundColor: 'transparent',
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
 });

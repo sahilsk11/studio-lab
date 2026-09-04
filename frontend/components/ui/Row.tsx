@@ -74,8 +74,8 @@ export function Row({
     <View style={[styles.row, disabled && styles.disabled]}>
       <View style={styles.rowMain}>
         {icon ? (
-          <View style={[styles.iconWell, { backgroundColor: `${tint}1A` }]}>
-            <Ionicons name={icon} size={15} color={tint} />
+          <View style={styles.iconSlot}>
+            <Ionicons name={icon} size={18} color={tint} />
           </View>
         ) : null}
 
@@ -150,12 +150,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.space.md,
   },
-  iconWell: {
-    width: 28,
-    height: 28,
-    borderRadius: theme.radius.sm,
+  iconSlot: {
+    width: 22,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   labels: {
     flex: 1,

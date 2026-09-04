@@ -361,14 +361,11 @@ function CastCard({
 function PatternPreview({ status }: { status: Person['imageStatus'] }) {
   return (
     <View style={styles.pattern}>
-      {Array.from({ length: 12 }).map((_, index) => (
-        <View key={index} style={[styles.patternStripe, { left: index * 33 - 80 }]} />
-      ))}
       <View style={styles.patternLabel}>
         {status === 'generating' ? (
           <ActivityIndicator size="small" color={theme.info} />
         ) : (
-          <Ionicons name="image-outline" size={18} color={theme.textTertiary} />
+          <Ionicons name="images-outline" size={22} color={theme.textTertiary} />
         )}
         <Text style={styles.patternText}>
           {status === 'generating' ? 'drawing now…' : 'ready to render'}
@@ -638,15 +635,7 @@ const styles = StyleSheet.create({
   bibleText: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 13, lineHeight: 19 },
   bibleRule: { height: 1, backgroundColor: theme.border },
   bibleCaption: { color: theme.textTertiary, fontFamily: theme.font.sans, fontSize: 11.5, lineHeight: 17 },
-  pattern: { flex: 1, overflow: 'hidden', backgroundColor: theme.surfaceMuted },
-  patternStripe: {
-    position: 'absolute',
-    top: -70,
-    width: 14,
-    height: 280,
-    backgroundColor: theme.accentSoft,
-    transform: [{ rotate: '45deg' }],
-  },
+  pattern: { flex: 1, backgroundColor: theme.surfaceMuted },
   patternLabel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
   patternText: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 10 },
   footer: { flexDirection: 'row', alignItems: 'center', gap: theme.space.lg },

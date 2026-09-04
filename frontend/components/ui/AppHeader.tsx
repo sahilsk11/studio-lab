@@ -10,15 +10,7 @@ import { ProjectPicker } from './ProjectPicker';
 import { AuthControls } from './AuthControls';
 
 export function BrandMark({ size = 20 }: { size?: number }) {
-  return (
-    <View
-      style={[
-        styles.mark,
-        { width: size, height: size, borderRadius: Math.max(4, size * 0.27) },
-      ]}>
-      <View style={styles.markCut} />
-    </View>
-  );
+  return <Ionicons name="videocam-outline" size={size} color={theme.accent} accessibilityLabel="Reel" />;
 }
 
 export function AppHeader({
@@ -49,7 +41,6 @@ export function AppHeader({
               accessibilityLabel="Go back"
               size={34}
               color={dark ? '#FFFDF8' : theme.text}
-              style={dark ? styles.iconButtonDark : undefined}
               onPress={onBack}
             />
           ) : (
@@ -112,18 +103,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  mark: {
-    backgroundColor: theme.accent,
-    overflow: 'hidden',
-    alignItems: 'flex-end',
-    justifyContent: 'flex-start',
-  },
-  markCut: {
-    width: '42%',
-    height: '42%',
-    borderBottomLeftRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.32)',
-  },
   wordmark: {
     flexShrink: 0,
     fontFamily: theme.font.sans,
@@ -134,10 +113,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.18,
   },
   wordmarkDark: { color: '#FFFDF8' },
-  iconButtonDark: {
-    backgroundColor: 'rgba(255,253,248,0.12)',
-    borderColor: 'rgba(255,253,248,0.3)',
-  },
   right: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -36,8 +36,8 @@ export function Callout({
   return (
     <GlassCard radius={theme.radius.md} style={style}>
       <View style={styles.inner}>
-        <View style={[styles.iconWell, { backgroundColor: `${look.color}1F` }]}>
-          <Ionicons name={look.icon} size={16} color={look.color} />
+        <View style={styles.iconSlot}>
+          <Ionicons name={look.icon} size={18} color={look.color} />
         </View>
 
         <View style={styles.body}>
@@ -67,12 +67,10 @@ const styles = StyleSheet.create({
     gap: theme.space.md,
     padding: theme.space.lg,
   },
-  iconWell: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  iconSlot: {
+    width: 22,
+    paddingTop: 1,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   body: {
     flex: 1,
