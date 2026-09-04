@@ -218,6 +218,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  placeholder: { opacity: 0 },
   pressed: { opacity: 0.7 },
 });
