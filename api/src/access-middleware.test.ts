@@ -83,7 +83,14 @@ async function request(
   });
 }
 
-describe('Express Access middleware (fail-closed)', () => {
+describe('Express Access middleware (fail-closed when enabled)', () => {
+  it('skips Access checks when the verifier is not configured', async () => {
+    const app = createTestApp(null);
+    const result = await request(app, '/api/projects');
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ projects: [] });
+  });
+
   it('allows /health without a JWT', async () => {
     const app = createTestApp(createCloudflareAccessVerifier(config, keySet));
     const result = await request(app, '/health');

@@ -19,20 +19,20 @@ Start the API before the frontend. Both are started as long-running dev servers 
 ### Lint / test / typecheck
 
 - No ESLint configs. Run `npm run typecheck` and `npm run test` inside `api/` and `frontend/` separately.
-- API tests cover Cloudflare Access JWT verification and fail-closed Express middleware.
-- Frontend tests cover Pages Functions (`functions/_lib/*`) for Access JWT extraction and Fly proxying.
+- API tests cover optional Cloudflare Access JWT verification (opt-in) and Clerk/anonymous auth middleware.
+- Frontend tests cover Pages Functions (`functions/_lib/*`) for Fly proxying.
 
 ### Production deploy (Cloudflare Pages + Fly.io)
 
-Production hostname: **https://studiolab.ultron.sh** (Cloudflare Access on `*.ultron.sh`, team `sahilagentserver.cloudflareaccess.com`).
+Production hostname: **https://studiolab.ultron.sh**. The SPA may stay behind Cloudflare Access; the Fly API and Pages `/api` proxy do not require an Access JWT. Clerk gates video generation. Set both `CLOUDFLARE_ACCESS_*` vars only to re-enable the API Access verifier (admin / private use).
 
 | Layer | Host | Notes |
 |---|---|---|
 | Frontend | Cloudflare Pages (`frontend/wrangler.toml`) | Static Expo web export → `dist/` |
-| API proxy | Pages Functions `/api/*`, `/media/*`, `/health` | Forwards Access JWT to Fly |
+| API proxy | Pages Functions `/api/*`, `/media/*`, `/health` | Forwards Clerk + anonymous session headers to Fly |
 | API | Fly.io app `studio-lab` (`api/fly.toml`) | SQLite + media on `/data` volume |
 
-**Local dev** uses `http://localhost:3001` directly (Access verification disabled unless `CLOUDFLARE_ACCESS_*` env vars are set).
+**Local dev** uses `http://localhost:3001` directly (Access verification stays off unless both `CLOUDFLARE_ACCESS_*` env vars are set).
 
 **Production frontend build** sets `EXPO_PUBLIC_API_URL=` (empty) so the SPA calls same-origin `/api/*` through Pages Functions — never `*.fly.dev` from the browser.
 

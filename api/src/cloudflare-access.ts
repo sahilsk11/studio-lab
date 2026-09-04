@@ -23,17 +23,11 @@ export class CloudflareAccessError extends Error {
   }
 }
 
+/** Opt-in Access JWT gate. Unset in production so the API is public; set both to re-enable (admin, etc.). */
 export function loadCloudflareAccessConfig(env: NodeJS.ProcessEnv): CloudflareAccessConfig | null {
   const audience = env.CLOUDFLARE_ACCESS_AUD?.trim();
   const teamDomain = env.CLOUDFLARE_ACCESS_TEAM_DOMAIN?.trim();
-  const required = env.NODE_ENV === 'production' || Boolean(audience || teamDomain);
-
-  if (!required) return null;
-  if (!audience || !teamDomain) {
-    throw new Error(
-      'CLOUDFLARE_ACCESS_AUD and CLOUDFLARE_ACCESS_TEAM_DOMAIN are required in production',
-    );
-  }
+  if (!audience || !teamDomain) return null;
 
   const issuerUrl = new URL(teamDomain.includes('://') ? teamDomain : `https://${teamDomain}`);
   if (

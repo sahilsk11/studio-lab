@@ -56,15 +56,15 @@ The app also has a demo mode that uses bundled placeholder assets and does not r
 
 ## Production deploy
 
-Architecture mirrors [ag-job-hunt](https://github.com/sahilsk11/ag-job-hunt): Cloudflare Access on the frontend hostname, Pages Functions proxy same-origin `/api/*` and `/media/*` to Fly.io, API verifies the forwarded Access JWT.
+Public API behind **https://studiolab.ultron.sh**: Cloudflare Pages serves the Expo web export; Pages Functions proxy same-origin `/api/*` and `/media/*` to Fly.io. **Clerk** handles sign-in; video generation (`POST /api/projects/:id/video`) requires a Clerk session. Anonymous sessions (`X-Anonymous-Session`) cover the rest of the pipeline. Cloudflare Access may still protect the SPA hostname; the Fly API and Pages proxy do not require an Access JWT. The Access verifier stays in the codebase and turns on only when both `CLOUDFLARE_ACCESS_AUD` and `CLOUDFLARE_ACCESS_TEAM_DOMAIN` are set.
 
-**Continuous deployment:** pushes to `main` run [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — verify frontend and API, then deploy the Fly app (`studio-lab`) and Cloudflare Pages project (`studiolab`). Required GitHub repository secrets: `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Manual `fly deploy` and ad-hoc `wrangler pages deploy` still work as fallbacks.
+**Continuous deployment:** pushes to `main` run [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — verify frontend and API, then deploy the Fly app (`studio-lab`) and Cloudflare Pages project (`studiolab`). Required GitHub repository secrets: `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, and Fly secret `CLERK_SECRET_KEY`. Manual `fly deploy` and ad-hoc `wrangler pages deploy` still work as fallbacks.
 
 | Component | Config | Host |
 |---|---|---|
 | Frontend | `frontend/wrangler.toml` | `https://studiolab.ultron.sh` |
-| Pages Functions | `frontend/functions/` | Proxies to Fly with JWT |
-| API | `api/fly.toml`, `api/Dockerfile` | `https://studio-lab.fly.dev` (internal; browser never calls this) |
+| Pages Functions | `frontend/functions/` | Proxies `/api/*` and `/media/*` to Fly |
+| API | `api/fly.toml`, `api/Dockerfile` | `https://studio-lab.fly.dev` (browser never calls this) |
 
 ### Build commands
 
@@ -87,19 +87,19 @@ docker build -t studio-lab-api .
 cd api
 fly apps create studio-lab          # if not exists
 fly volumes create studio_lab_data --region iad --size 1
-fly secrets set CLOUDFLARE_ACCESS_AUD="<AUD from Access app for studiolab.ultron.sh>"
+fly secrets set CLERK_SECRET_KEY="sk_live_..."
 # OPENROUTER_API_KEY is optional until generation is needed:
 # fly secrets set OPENROUTER_API_KEY="sk-or-..."
 fly deploy
 ```
 
-Find the Access application AUD in Cloudflare Zero Trust → Access → Applications → the **studiolab** app (not the `*.ultron.sh` wildcard). `CLOUDFLARE_ACCESS_TEAM_DOMAIN` is already set in `fly.toml` to `https://sahilagentserver.cloudflareaccess.com`.
+Cloudflare Access on the API is **opt-in**. Leave `CLOUDFLARE_ACCESS_*` unset for the public API. To re-enable the verifier later (admin / private use), set both `CLOUDFLARE_ACCESS_AUD` and `CLOUDFLARE_ACCESS_TEAM_DOMAIN`. If a leftover beta secret is still on Fly:
 
-If the UI loads after Access login but API calls show **Failed to fetch**, check:
+```bash
+fly secrets unset CLOUDFLARE_ACCESS_AUD
+```
 
-1. Fly `CLOUDFLARE_ACCESS_AUD` matches the **studiolab** app AUD (not the wildcard).
-2. Settings → Studio API is not still set to `http://localhost:3001` from local dev.
-3. The deployed frontend sends `credentials: 'include'` on API fetches so the `CF_Authorization` cookie reaches Pages Functions.
+If the UI loads but API calls fail, check Settings → Studio API is not still set to `http://localhost:3001` from local dev.
 
 #### 2. Cloudflare Pages
 
@@ -114,10 +114,10 @@ CI builds from `frontend/` with `EXPO_PUBLIC_API_URL= npm run export:web` and de
 
 #### 3. Verify
 
-- `GET https://studiolab.ultron.sh/health` → `{"ok":true,...}` (via Pages proxy, after Access login)
-- `GET https://studio-lab.fly.dev/health` → 200 without JWT (Fly health check)
-- `GET https://studio-lab.fly.dev/api/projects` without JWT → 401
-- SPA loads at `https://studiolab.ultron.sh` and API calls stay same-origin
+- `GET https://studiolab.ultron.sh/health` → `{"ok":true,...}` (via Pages proxy)
+- `GET https://studio-lab.fly.dev/health` → 200
+- SPA loads at `https://studiolab.ultron.sh`; API calls stay same-origin
+- Video generation prompts Clerk sign-in; other steps work with an anonymous session
 
 ## Git and runtime data
 
