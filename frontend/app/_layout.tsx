@@ -1,7 +1,6 @@
 import { ClerkProvider } from '@clerk/clerk-react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -17,19 +16,14 @@ import { getAnonymousSessionId } from '@/lib/session';
 
 export { ErrorBoundary } from 'expo-router';
 
-function AnonymousSessionBootstrap() {
-  useEffect(() => {
-    setAnonymousSessionGetter(() => getAnonymousSessionId());
-  }, []);
-  return null;
-}
+// Register before ProjectProvider's first API call (child useEffects run too late).
+setAnonymousSessionGetter(() => getAnonymousSessionId());
 
 function AppShell() {
   return (
     <SettingsProvider>
       <AuthStateProvider>
         <ProjectProvider>
-          <AnonymousSessionBootstrap />
           {isClerkEnabled() ? <ApiAuthBridge /> : null}
         <StatusBar style="dark" />
         <View style={{ flex: 1, backgroundColor: theme.bg }}>

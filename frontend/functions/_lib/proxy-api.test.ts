@@ -93,17 +93,22 @@ describe('proxyApiRequest', () => {
     expect(headers.get('x-anonymous-session')).toBe('anon-1');
   });
 
-  it('returns 401 when the browser has no Access token', async () => {
-    const fetchMock = vi.fn();
+  it('proxies without an Access token for public traffic', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"projects":[]}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const response = await proxyApiRequest(
-      new Request('https://studiolab.ultron.sh/api/project'),
+      new Request('https://studiolab.ultron.sh/api/projects'),
       {},
     );
 
-    expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: 'unauthorized' });
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ projects: [] });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const call = fetchMock.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, init] = call as unknown as [URL, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(headers.get('cf-access-jwt-assertion')).toBeNull();
   });
 });
