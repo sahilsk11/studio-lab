@@ -22,6 +22,12 @@ export default function Root({ children }: { children: ReactNode }) {
           href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
+        {/* Production export rewrites this to /fonts/ionicons.ttf in postexport-web.mjs */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `@font-face{font-family:ionicons;src:url("/fonts/ionicons.ttf") format("truetype");font-display:block}`,
+          }}
+        />
 
         {/* Keeps ScrollView behaviour on web close to native. */}
         <ScrollViewStyleReset />
