@@ -12,7 +12,7 @@ export default function NotFoundScreen() {
       <Stack.Screen options={{ title: 'Not found', headerShown: false }} />
       <Screen>
         <Container style={styles.wrap}>
-          <BrandMark size={44} />
+          <BrandMark />
           <Title>This screen doesn't exist</Title>
           <Body style={styles.sub}>
             The page you were looking for isn't part of this reel.

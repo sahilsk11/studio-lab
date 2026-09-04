@@ -6,7 +6,7 @@ import { useSidebar } from '@/context/SidebarContext';
 import { useSettings } from '@/context/SettingsContext';
 import { IconButton } from './Button';
 import { Container } from './Screen';
-import { AuthControls } from './AuthControls';
+import { SidebarAuth } from './AuthControls';
 import { useDesktopLayout } from './StepSidebar';
 
 export function BrandMark() {
@@ -60,7 +60,7 @@ export function AppHeader({
 
         <View style={styles.right}>
           {right}
-          <AuthControls />
+          <SidebarAuth />
         </View>
       </View>
     </Container>
