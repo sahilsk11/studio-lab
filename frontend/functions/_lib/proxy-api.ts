@@ -30,7 +30,7 @@ export function upstreamProxyUrl(requestUrl: string, apiOrigin: string): URL | n
   return new URL(`${apiOrigin}${pathname}${incoming.search}`);
 }
 
-function forwardedHeaders(request: Request): Headers {
+function forwardedHeaders(request: Request, jwt: string): Headers {
   const headers = new Headers();
   const accept = request.headers.get('accept');
   if (accept) headers.set('accept', accept);
@@ -42,8 +42,7 @@ function forwardedHeaders(request: Request): Headers {
   if (authorization) headers.set('authorization', authorization);
   const anonymousSession = request.headers.get('x-anonymous-session');
   if (anonymousSession) headers.set('x-anonymous-session', anonymousSession);
-  const jwt = accessJwtFromRequest(request);
-  if (jwt) headers.set('cf-access-jwt-assertion', jwt);
+  headers.set('cf-access-jwt-assertion', jwt);
   return headers;
 }
 
@@ -51,10 +50,13 @@ export async function proxyApiRequest(request: Request, env: ApiProxyEnv): Promi
   const upstream = upstreamProxyUrl(request.url, apiOriginFromEnv(env));
   if (!upstream) return jsonError(404, 'not found');
 
+  const jwt = accessJwtFromRequest(request);
+  if (!jwt) return jsonError(401, 'unauthorized');
+
   const method = request.method.toUpperCase();
   const init: RequestInit & { duplex?: 'half' } = {
     method,
-    headers: forwardedHeaders(request),
+    headers: forwardedHeaders(request, jwt),
     redirect: 'manual',
   };
   if (method !== 'GET' && method !== 'HEAD') {
