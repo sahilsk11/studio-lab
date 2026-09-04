@@ -2,10 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -14,33 +12,23 @@ import {
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
 import {
-  Body,
   Button,
   Callout,
   Caption,
   CaptionStrong,
-  Container,
-  CONTENT_MAX_WIDTH,
   GlassCard,
   Mono,
   Screen,
-  SIDEBAR_WIDTH,
   StatusBadge,
-  Title,
-  useDesktopLayout,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
 import type { Project, Scene } from '@/types/project';
 
-const GAP = theme.space.md;
-const PAGE_PAD = theme.space.xl;
-
 export default function PlacesScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const desktop = useDesktopLayout();
   const {
     project,
     hydrated,
@@ -55,13 +43,7 @@ export default function PlacesScreen() {
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const [kept, setKept] = useState<string[]>([]);
-
-  const contentWidth = Math.max(
-    280,
-    Math.min((desktop ? width - SIDEBAR_WIDTH : width) - PAGE_PAD * 2, CONTENT_MAX_WIDTH),
-  );
-  const columns = contentWidth >= 940 ? 3 : contentWidth >= 680 ? 2 : 1;
-  const cardWidth = (contentWidth - GAP * (columns - 1)) / columns;
+  const compact = width < 700;
 
   useEffect(() => {
     if (!hydrated) return;
@@ -90,72 +72,58 @@ export default function PlacesScreen() {
     }
   }
 
+  const remaining = Math.max(0, project.scenes.length - kept.length);
+  const nextHint =
+    remaining > 0
+      ? remaining === project.scenes.length && project.scenes.length === 2
+        ? 'keep both to continue'
+        : `keep ${remaining} more to continue`
+      : undefined;
+
   if (!hydrated || (project.scenes.length === 0 && !testMode)) {
-    return (
-      <Screen currentStep="Places">
-        <View style={styles.loading}>
-          <ActivityIndicator color={theme.textSecondary} />
-        </View>
-      </Screen>
-    );
+    return <Screen currentStep="Places" loading />;
   }
 
   return (
     <Screen
       currentStep="Places"
-      footer={
-        <Button
-          label="Next: Action"
-          iconRight="arrow-forward"
-          size="lg"
-          inline
-          disabled={advancing}
-          loading={advancing}
-          onPress={() => void handleNext()}
-        />
-      }>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={styles.stack}>
-          <View style={styles.heading}>
-            <Title>Where it happens</Title>
-            <Body style={styles.subhead}>
-              Review each location as a wide establishing plate. Tune the prompt before the action is locked.
-            </Body>
-            <View style={styles.summaryRow}>
-              <Mono>{project.scenes.length} places</Mono>
-              <View style={styles.dot} />
-              <Mono>{kept.length} kept</Mono>
-              <View style={styles.dot} />
-              <Mono>{project.style}</Mono>
-            </View>
-          </View>
+      title="Where it happens"
+      subtitle="Two locations, generated as wide establishing plates. Tune a prompt before you keep it."
+      stats={[
+        { label: 'Places', value: String(project.scenes.length) },
+        { label: 'Kept', value: String(kept.length) },
+        { label: 'Look', value: project.style },
+      ]}
+      next={{
+        label: 'Next: Action',
+        onPress: () => void handleNext(),
+        disabled: advancing,
+        loading: advancing,
+        hint: nextHint,
+      }}>
+      {error ? <Callout variant="error" title="Places paused" message={error} /> : null}
 
-          {error ? <Callout variant="error" title="Places paused" message={error} /> : null}
-
-          <View style={[styles.grid, { gap: GAP }]}>
-            {project.scenes.map((scene, index) => (
-              <PlaceCard
-                key={scene.id}
-                scene={scene}
-                project={project}
-                index={index}
-                width={cardWidth}
-                kept={kept.includes(scene.id)}
-                showCost={settings.showCosts}
-                onToggleKeep={() => {
-                  tap('light');
-                  setKept((current) =>
-                    current.includes(scene.id)
-                      ? current.filter((id) => id !== scene.id)
-                      : [...current, scene.id],
-                  );
-                }}
-                onEdit={() => setEditing({ kind: 'scene', item: scene })}
-              />
-            ))}
-          </View>
-        </Container>
-      </ScrollView>
+      <View style={[styles.grid, compact && styles.gridCompact]}>
+        {project.scenes.map((scene, index) => (
+          <PlaceCard
+            key={scene.id}
+            scene={scene}
+            project={project}
+            index={index}
+            kept={kept.includes(scene.id)}
+            showCost={settings.showCosts}
+            onToggleKeep={() => {
+              tap('light');
+              setKept((current) =>
+                current.includes(scene.id)
+                  ? current.filter((id) => id !== scene.id)
+                  : [...current, scene.id],
+              );
+            }}
+            onEdit={() => setEditing({ kind: 'scene', item: scene })}
+          />
+        ))}
+      </View>
 
       <ItemEditor
         target={editing}
@@ -172,7 +140,6 @@ function PlaceCard({
   scene,
   project,
   index,
-  width,
   kept,
   showCost,
   onToggleKeep,
@@ -181,7 +148,6 @@ function PlaceCard({
   scene: Scene;
   project: Project;
   index: number;
-  width: number;
   kept: boolean;
   showCost: boolean;
   onToggleKeep: () => void;
@@ -197,7 +163,7 @@ function PlaceCard({
     <GlassCard
       radius={theme.radius.md}
       tone={kept ? 'active' : 'raised'}
-      style={[styles.placeCard, { width }]}
+      style={styles.placeCard}
       glowColor={kept ? theme.accent : undefined}>
       <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit ${scene.title}`}>
         <View style={styles.imagePair}>
@@ -271,19 +237,9 @@ function PlaceImage({ uri, label, narrow }: { uri?: string; label: string; narro
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: {
-    paddingHorizontal: PAGE_PAD,
-    paddingTop: theme.space.sm,
-    paddingBottom: theme.space.xxl,
-  },
-  stack: { gap: theme.space.xl },
-  heading: { gap: theme.space.sm },
-  subhead: { maxWidth: 560 },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.space.sm, flexWrap: 'wrap' },
-  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: theme.textQuaternary },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  placeCard: { overflow: 'hidden' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.md },
+  gridCompact: { flexDirection: 'column', flexWrap: 'nowrap' },
+  placeCard: { overflow: 'hidden', flexGrow: 1, flexBasis: 320, minWidth: 280 },
   imagePair: { height: 154, flexDirection: 'row', gap: 2, backgroundColor: theme.bgSunken },
   placeImage: { flex: 1.55, overflow: 'hidden', backgroundColor: theme.surface },
   placeImageNarrow: { flex: 1 },

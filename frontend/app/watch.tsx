@@ -3,12 +3,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { createElement, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Linking,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -16,26 +14,20 @@ import {
 } from 'react-native';
 
 import {
-  Body,
   Button,
   Callout,
   Caption,
   CaptionStrong,
-  Container,
   GlassCard,
   Mono,
   ProgressRail,
   Screen,
-  Title,
-  useDesktopLayout,
 } from '@/components/ui';
 import { SignInGate, useAuthGate } from '@/components/ui/SignInGate';
 import { fill, theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
 import type { Project, VideoPhase } from '@/types/project';
-
-const PAGE_PAD = theme.space.xl;
 
 const PHASE_PROGRESS: Record<VideoPhase, number> = {
   idle: 0,
@@ -69,8 +61,6 @@ export default function WatchScreen() {
     [...project.frames].sort((a, b) => a.order - b.order).find((frame) => frame.imageUri)?.imageUri ??
     project.scenes.find((scene) => scene.imageUri)?.imageUri;
   const isWide = width >= 720;
-  const desktop = useDesktopLayout();
-  const darkMobile = !isWide;
 
   useEffect(() => {
     if (!hydrated || !authReady || ready || activePhase || failed || started.current || needsSignIn) return;
@@ -124,46 +114,41 @@ export default function WatchScreen() {
   }
 
   if (!hydrated || (!testMode && !authReady)) {
-    return (
-      <Screen currentStep="Watch">
-        <View style={styles.loading}>
-          <ActivityIndicator color={theme.textSecondary} />
-        </View>
-      </Screen>
-    );
+    return <Screen currentStep="Watch" loading />;
   }
 
   const progress = ready ? 100 : PHASE_PROGRESS[phase] || (rendering ? 8 : 0);
   const status = phaseCopy(project, rendering, elapsed, testMode);
+  const title = failed
+    ? 'This version needs another pass'
+    : ready
+      ? `Done — ${project.durationSec} seconds`
+      : 'Building your reel';
 
   return (
     <Screen
       currentStep="Watch"
-      sidebarDark={darkMobile}
-      contentStyle={darkMobile ? styles.mobileScreen : undefined}>
-      <ScrollView
-        style={darkMobile ? styles.mobileScreen : undefined}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, darkMobile && styles.scrollDark]}>
-        <Container style={styles.stack}>
-          {!needsSignIn || ready ? (
-            <View style={styles.topActions}>
-              {ready ? (
-                <Button
-                  label="Download"
-                  icon="download-outline"
-                  size="sm"
-                  variant="secondary"
-                  inline
-                  disabled={!project.videoUri}
-                  onPress={() => void handleDownload()}
-                />
-              ) : (
-                <Mono>{progress}%</Mono>
-              )}
-            </View>
-          ) : null}
-
+      title={title}
+      subtitle={status}
+      stats={[
+        { label: 'Length', value: `${project.durationSec}s` },
+        { label: 'Look', value: project.style },
+        { label: 'Status', value: ready ? 'Ready' : failed ? 'Retry' : 'Rendering' },
+      ]}
+      extra={
+        ready ? (
+          <Button
+            label="Download"
+            icon="download-outline"
+            size="sm"
+            variant="secondary"
+            inline
+            disabled={!project.videoUri}
+            onPress={() => void handleDownload()}
+          />
+        ) : null
+      }>
+      <View style={styles.stack}>
           {failed && !needsSignIn ? (
             <Callout
               variant="error"
@@ -190,19 +175,7 @@ export default function WatchScreen() {
                 />
 
                 <View style={styles.sidePanel}>
-                  <View style={styles.titleBlock}>
-                    <Mono color={darkMobile ? '#C8BCAF' : undefined}>
-                      {ready ? 'FINAL CUT' : 'RENDERING FINAL CUT'}
-                    </Mono>
-                    <Title color={darkMobile ? '#FFFDF8' : undefined}>
-                      {failed
-                        ? 'This version needs another pass'
-                        : ready
-                          ? `Done — ${project.durationSec} seconds`
-                          : 'Building your reel'}
-                    </Title>
-                    <Body color={darkMobile ? '#D5CBC0' : undefined}>{status}</Body>
-                  </View>
+                  <Mono>{ready ? 'FINAL CUT' : 'RENDERING FINAL CUT'}</Mono>
 
                   {!ready && !failed ? (
                     <GlassCard tone="raised" radius={theme.radius.md}>
@@ -223,7 +196,7 @@ export default function WatchScreen() {
 
                   {ready ? (
                     <View style={styles.quickSection}>
-                      <Mono color={darkMobile ? '#C8BCAF' : undefined}>QUICK CHANGES</Mono>
+                      <Mono>QUICK CHANGES</Mono>
                       <View style={styles.quickChips}>
                         {['slower pacing', 'warmer light', 'tighter ending', 'more camera motion'].map((label) => (
                           <Pressable
@@ -236,13 +209,11 @@ export default function WatchScreen() {
                             }}
                             style={[
                               styles.quickChip,
-                              darkMobile && styles.quickChipDark,
                               quickChange === label && styles.quickChipSelected,
                             ]}>
                             <Text
                               style={[
                                 styles.quickChipText,
-                                darkMobile && styles.quickChipTextDark,
                                 quickChange === label && styles.quickChipTextSelected,
                               ]}>
                               {label}
@@ -299,8 +270,7 @@ export default function WatchScreen() {
               ) : null}
             </>
           )}
-        </Container>
-      </ScrollView>
+      </View>
     </Screen>
   );
 }
@@ -475,20 +445,7 @@ async function downloadMedia(uri: string, filename: string) {
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  mobileScreen: { backgroundColor: '#302C27' },
-  scroll: {
-    paddingHorizontal: PAGE_PAD,
-    paddingTop: theme.space.sm,
-    paddingBottom: theme.space.xxl,
-  },
-  scrollDark: { backgroundColor: '#302C27' },
   stack: { gap: theme.space.xl },
-  topActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
   editorial: { alignItems: 'center', gap: theme.space.xxl },
   editorialWide: { flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch' },
   editorialNarrow: { flexDirection: 'column' },
@@ -540,7 +497,6 @@ const styles = StyleSheet.create({
   scrubFill: { height: '100%', borderRadius: 2, backgroundColor: theme.warning },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between' },
   sidePanel: { flex: 1, width: '100%', maxWidth: 330, justifyContent: 'center', gap: theme.space.xl },
-  titleBlock: { gap: theme.space.sm },
   renderStatus: { padding: theme.space.lg, gap: theme.space.md },
   renderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   quickSection: { gap: theme.space.md },
@@ -553,10 +509,8 @@ const styles = StyleSheet.create({
     borderColor: theme.borderStrong,
     backgroundColor: theme.surface,
   },
-  quickChipDark: { borderColor: '#6A6056', backgroundColor: '#3A342F' },
   quickChipSelected: { borderColor: theme.warning, backgroundColor: theme.warningDim },
   quickChipText: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 13 },
-  quickChipTextDark: { color: '#E4D9CC' },
   quickChipTextSelected: { color: theme.warning },
   actions: { gap: theme.space.md },
   deliveryRow: { flexDirection: 'row', flexWrap: 'wrap', padding: theme.space.lg, gap: theme.space.lg },

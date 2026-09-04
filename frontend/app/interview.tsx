@@ -1,26 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 
-import {
-  Button,
-  Container,
-  Screen,
-} from '@/components/ui';
+import { Button, Screen } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
-import { useSidebar } from '@/context/SidebarContext';
 
 type Question = {
   id: 'feel' | 'setting' | 'cast' | 'ending';
@@ -99,7 +92,6 @@ export default function InterviewScreen() {
     generateAllCastImages,
   } = useProject();
   const { settings, tap } = useSettings();
-  const { markNavigated } = useSidebar();
   const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
   const [creating, setCreating] = useState(false);
 
@@ -108,10 +100,6 @@ export default function InterviewScreen() {
     () => QUESTIONS.filter((question) => answers[question.id].length > 0).length,
     [answers],
   );
-
-  useEffect(() => {
-    markNavigated();
-  }, [markNavigated]);
 
   function choose(question: Question, option: string) {
     tap('light');
@@ -140,57 +128,44 @@ export default function InterviewScreen() {
     }
   }
 
-  if (!hydrated) {
-    return (
-      <Screen currentStep="Clarify project">
-        <View style={styles.loading}>
-          <ActivityIndicator color={theme.textSecondary} />
-        </View>
-      </Screen>
-    );
-  }
-
   return (
     <Screen
       currentStep="Clarify project"
-      footer={
-        <View style={[styles.footer, compact && styles.footerCompact]}>
-          <Button
-            label={answered === 4 ? 'Create cast' : `Answer ${4 - answered} more`}
-            iconRight="arrow-forward"
-            loading={creating}
-            disabled={answered < 4 || creating}
-            inline
-            onPress={() => void createCast()}
-          />
-          <Button
-            label="Pick for me"
-            variant="secondary"
-            inline
-            loading={creating}
-            disabled={creating}
-            onPress={() => void createCast()}
-          />
-        </View>
+      loading={!hydrated}
+      title="Make it specific"
+      subtitle="Four questions. Then I start drawing the cast."
+      stats={[{ label: 'Answered', value: `${answered}/4` }]}
+      next={{
+        label: answered === 4 ? 'Create cast' : `Answer ${4 - answered} more`,
+        onPress: () => void createCast(),
+        loading: creating,
+        disabled: answered < 4 || creating,
+      }}
+      extra={
+        <Button
+          label="Pick for me"
+          variant="ghost"
+          size="md"
+          inline
+          loading={creating}
+          disabled={creating}
+          onPress={() => void createCast()}
+        />
       }>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={styles.container}>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <View style={[styles.sheet, compact && styles.sheetCompact]}>
-            {QUESTIONS.map((question, index) => (
-              <QuestionCard
-                key={question.id}
-                number={index + 1}
-                question={question}
-                selected={answers[question.id]}
-                compact={compact}
-                onChoose={(option) => choose(question, option)}
-              />
-            ))}
-          </View>
-        </Container>
-      </ScrollView>
+      <View style={[styles.sheet, compact && styles.sheetCompact]}>
+        {QUESTIONS.map((question, index) => (
+          <QuestionCard
+            key={question.id}
+            number={index + 1}
+            question={question}
+            selected={answers[question.id]}
+            compact={compact}
+            onChoose={(option) => choose(question, option)}
+          />
+        ))}
+      </View>
     </Screen>
   );
 }
@@ -261,14 +236,7 @@ function QuestionCard({
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: {
-    paddingHorizontal: theme.space.xl,
-    paddingTop: theme.space.sm,
-    paddingBottom: theme.space.xxxl,
-  },
-  container: { maxWidth: 1120, gap: theme.space.md },
-  error: { color: theme.danger, fontFamily: theme.font.sans, fontSize: 13 },
+  error: { color: theme.danger, fontFamily: theme.font.sans, fontSize: 13, marginBottom: theme.space.md },
   sheet: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: theme.space.md },
   sheetCompact: { flexDirection: 'column', flexWrap: 'nowrap' },
   question: {
@@ -344,7 +312,5 @@ const styles = StyleSheet.create({
     borderColor: theme.borderStrong,
   },
   checkSelected: { backgroundColor: theme.accent, borderColor: theme.accent },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: theme.space.md },
-  footerCompact: { flexWrap: 'wrap' },
   pressed: { opacity: 0.62 },
 });

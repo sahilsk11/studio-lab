@@ -72,10 +72,11 @@ export type Accent = typeof CHROMA;
 
 const radius = {
   xs: 5,
-  sm: 7,
-  md: 10,
-  lg: 12,
-  xl: 16,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  panel: 22,
   pill: 999,
 } as const;
 

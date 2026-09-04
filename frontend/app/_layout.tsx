@@ -15,7 +15,6 @@ import { theme } from '@/constants/theme';
 import { clerkAppearance } from '@/lib/clerk-appearance';
 import { ProjectProvider } from '@/context/ProjectContext';
 import { SettingsProvider } from '@/context/SettingsContext';
-import { SidebarProvider } from '@/context/SidebarContext';
 import { setAnonymousSessionGetter } from '@/lib/api';
 import { getAnonymousSessionId } from '@/lib/session';
 
@@ -44,7 +43,6 @@ function AppShell() {
   }
   return (
     <SettingsProvider>
-      <SidebarProvider>
       <AuthStateProvider>
         <ProjectProvider>
           {isClerkEnabled() ? <ApiAuthBridge /> : null}
@@ -68,7 +66,6 @@ function AppShell() {
         </View>
       </ProjectProvider>
       </AuthStateProvider>
-      </SidebarProvider>
     </SettingsProvider>
   );
 }

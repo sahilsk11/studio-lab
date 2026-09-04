@@ -1,21 +1,21 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
+import { stepDetail, stepShort } from '@/lib/chrome';
 import { canNavigateToStep, stepRoute } from '@/lib/project';
 import { STEPS, type Step } from '@/types/project';
 
-/** Seven-step, bidirectional project rail. */
+/** Seven-step rail with numbered icons and status meta. */
 export function StepRail({
   current,
   orientation = 'horizontal',
-  dark = false,
 }: {
   current: Step;
   orientation?: 'horizontal' | 'vertical';
-  dark?: boolean;
 }) {
   const router = useRouter();
   const { project } = useProject();
@@ -28,13 +28,14 @@ export function StepRail({
     const isCurrent = step === current;
     const isDone = index < currentIndex;
     const isFuture = !isDone && !isCurrent;
+    const detail = stepDetail(project, step, current);
 
     return (
       <Pressable
         key={step}
         accessibilityRole="tab"
         accessibilityState={{ selected: isCurrent, disabled: !reachable }}
-        accessibilityLabel={`Step ${index + 1} of ${STEPS.length}: ${step}`}
+        accessibilityLabel={`Step ${index + 1} of ${STEPS.length}: ${stepShort(step)}`}
         disabled={!reachable || isCurrent}
         onPress={() => {
           tap('light');
@@ -44,40 +45,33 @@ export function StepRail({
           styles.item,
           vertical ? styles.itemVertical : styles.itemHorizontal,
           isCurrent && styles.current,
-          isCurrent && dark && styles.currentDark,
-          !reachable && isFuture && styles.itemFuture,
           pressed && reachable && styles.pressed,
         ]}>
-        <View
-          style={[
-            styles.dot,
-            dark && styles.dotDark,
-            isDone && styles.dotDone,
-            isCurrent && styles.dotCurrent,
-            isFuture && styles.dotFuture,
-            isFuture && dark && styles.dotFutureDark,
-          ]}
-        />
+        <StepIcon index={index} done={isDone} current={isCurrent} />
         <Text
           numberOfLines={1}
           style={[
             styles.label,
-            dark && styles.labelDark,
             isDone && styles.labelDone,
-            isDone && dark && styles.labelDoneDark,
             isCurrent && styles.labelCurrent,
             isFuture && styles.labelFuture,
-            isFuture && dark && styles.labelFutureDark,
           ]}>
-          {step}
+          {stepShort(step)}
         </Text>
+        {detail && vertical ? (
+          <Text
+            numberOfLines={1}
+            style={[styles.meta, isCurrent && styles.metaCurrent, isDone && !isCurrent && styles.metaDone]}>
+            {detail}
+          </Text>
+        ) : null}
       </Pressable>
     );
   });
 
   if (vertical) {
     return (
-      <View style={[styles.rail, styles.railVertical]} accessibilityRole="tablist">
+      <View style={styles.railVertical} accessibilityRole="tablist">
         {items}
       </View>
     );
@@ -94,92 +88,108 @@ export function StepRail({
   );
 }
 
+function StepIcon({ index, done, current }: { index: number; done: boolean; current: boolean }) {
+  if (done) {
+    return (
+      <View style={[styles.icon, styles.iconDone]}>
+        <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.icon, current && styles.iconCurrent, !current && styles.iconFuture]}>
+      <Text style={[styles.iconText, current && styles.iconTextCurrent]}>{index + 1}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  rail: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
   railVertical: {
+    width: '100%',
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 1,
+    gap: 2,
   },
   railHorizontal: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingVertical: 2,
-    paddingHorizontal: 2,
   },
   item: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
   itemHorizontal: {
-    minWidth: 74,
-    minHeight: 43,
+    minWidth: 78,
+    minHeight: 44,
     paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 4,
   },
   itemVertical: {
     width: '100%',
-    minHeight: 32,
+    minHeight: 34,
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    paddingHorizontal: 10,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     gap: 8,
-  },
-  itemFuture: {
-    opacity: 1,
   },
   current: {
     backgroundColor: theme.accentSoft,
+    borderColor: '#F0C4B4',
   },
-  currentDark: { backgroundColor: 'rgba(217,91,56,0.2)' },
   pressed: { opacity: 0.64 },
-  dot: {
-    width: 7,
-    height: 7,
+  icon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
-    borderRadius: 4,
+  },
+  iconDone: { backgroundColor: theme.success },
+  iconCurrent: { backgroundColor: theme.accent },
+  iconFuture: {
+    backgroundColor: theme.surfaceMuted,
     borderWidth: 1,
     borderColor: theme.borderStrong,
-    backgroundColor: theme.surface,
   },
-  dotDark: { borderColor: '#7D746A', backgroundColor: '#4A433C' },
-  dotDone: {
-    borderColor: theme.info,
-    backgroundColor: theme.info,
+  iconText: {
+    color: theme.textTertiary,
+    fontFamily: theme.font.sans,
+    fontSize: 10,
+    fontWeight: '700',
   },
-  dotCurrent: {
-    borderColor: theme.accent,
-    backgroundColor: theme.accent,
-  },
-  dotFuture: {
-    backgroundColor: 'transparent',
-    borderColor: theme.borderStrong,
-  },
-  dotFutureDark: {
-    backgroundColor: 'transparent',
-    borderColor: '#7D746A',
-  },
+  iconTextCurrent: { color: '#FFFFFF' },
   label: {
+    flexShrink: 1,
     fontFamily: theme.font.sans,
     fontSize: 13,
     fontWeight: '500',
     color: theme.textSecondary,
   },
-  labelDark: { color: '#AAA095' },
-  labelDone: { color: theme.textSecondary },
-  labelDoneDark: { color: '#E4D9CC' },
+  labelDone: { color: theme.text },
   labelCurrent: {
     color: theme.text,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   labelFuture: { color: theme.textQuaternary },
-  labelFutureDark: { color: '#7D746A' },
+  meta: {
+    marginLeft: 'auto',
+    color: theme.textTertiary,
+    fontFamily: theme.font.sans,
+    fontSize: 11,
+  },
+  metaCurrent: {
+    color: theme.accentDark,
+    fontWeight: '600',
+  },
+  metaDone: { color: theme.textQuaternary },
 });
