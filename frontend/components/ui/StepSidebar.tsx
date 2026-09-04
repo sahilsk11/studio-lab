@@ -51,11 +51,14 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     minHeight: 0,
+    width: '100%',
+    overflow: 'visible',
     gap: theme.space.lg,
   },
   projectBlock: {
     gap: 8,
-    zIndex: 30,
+    zIndex: 40,
+    overflow: 'visible',
   },
   railWrap: {
     flex: 1,
@@ -63,6 +66,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   footer: {
+    width: '100%',
     paddingTop: theme.space.sm,
   },
   labelRow: {

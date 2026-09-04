@@ -48,8 +48,20 @@ export function SidebarFooter({ labeledSettings = false }: { labeledSettings?: b
 
   if (!isClerkEnabled()) {
     return (
-      <View style={styles.row}>
-        <View style={styles.grow} />
+      <View style={styles.account}>
+        <View style={styles.accountMain}>
+          <View style={[styles.avatar, styles.avatarMuted]}>
+            <Text style={styles.avatarText}>?</Text>
+          </View>
+          <View style={styles.accountCopy}>
+            <Text numberOfLines={1} style={styles.accountName}>
+              Guest
+            </Text>
+            <Text numberOfLines={1} style={styles.accountMeta}>
+              not signed in
+            </Text>
+          </View>
+        </View>
         {settingsButton}
       </View>
     );
@@ -64,7 +76,18 @@ function ClerkFooter({ settingsButton }: { settingsButton: React.ReactNode }) {
   const { user } = useUser();
 
   if (!isLoaded) {
-    return <View style={[styles.account, styles.placeholder]} />;
+    return (
+      <View style={styles.account}>
+        <View style={styles.accountMain}>
+          <View style={[styles.avatar, styles.avatarMuted]} />
+          <View style={styles.accountCopy}>
+            <Text style={styles.accountName}> </Text>
+            <Text style={styles.accountMeta}> </Text>
+          </View>
+        </View>
+        {settingsButton}
+      </View>
+    );
   }
 
   if (isSignedIn) {
@@ -110,13 +133,14 @@ function ClerkFooter({ settingsButton }: { settingsButton: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   row: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  grow: { flex: 1 },
   signIn: { flex: 1 },
   account: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -157,6 +181,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: theme.info,
   },
+  avatarMuted: { backgroundColor: theme.textTertiary },
   avatarText: {
     color: '#FFFFFF',
     fontFamily: theme.font.sans,
