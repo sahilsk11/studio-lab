@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 
 import {
-  AppHeader,
   Body,
   Button,
   Callout,
@@ -27,8 +26,6 @@ import {
   Mono,
   ProgressRail,
   Screen,
-  SIDEBAR_INSET,
-  StepSidebar,
   Title,
   useDesktopLayout,
 } from '@/components/ui';
@@ -128,7 +125,7 @@ export default function WatchScreen() {
 
   if (!hydrated || (!testMode && !authReady)) {
     return (
-      <Screen header={<AppHeader title="Final cut" onBack={() => router.push('/scenes')} />}>
+      <Screen currentStep="Watch">
         <View style={styles.loading}>
           <ActivityIndicator color={theme.textSecondary} />
         </View>
@@ -141,35 +138,31 @@ export default function WatchScreen() {
 
   return (
     <Screen
-      contentStyle={darkMobile ? styles.mobileScreen : undefined}
-      header={
-        <AppHeader
-          title="Final cut"
-          dark={darkMobile}
-          onBack={() => router.push('/scenes')}
-          right={
-            needsSignIn && !ready ? undefined : ready ? (
-              <Button
-                label="Download"
-                icon="download-outline"
-                size="sm"
-                variant="secondary"
-                inline
-                disabled={!project.videoUri}
-                onPress={() => void handleDownload()}
-              />
-            ) : (
-              <Mono>{progress}%</Mono>
-            )
-          }
-        />
-      }>
+      currentStep="Watch"
+      sidebarDark={darkMobile}
+      contentStyle={darkMobile ? styles.mobileScreen : undefined}>
       <ScrollView
         style={darkMobile ? styles.mobileScreen : undefined}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, darkMobile && styles.scrollDark]}>
-        <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
-          <StepSidebar current="Watch" dark={darkMobile} />
+        <Container style={styles.stack}>
+          {!needsSignIn || ready ? (
+            <View style={styles.topActions}>
+              {ready ? (
+                <Button
+                  label="Download"
+                  icon="download-outline"
+                  size="sm"
+                  variant="secondary"
+                  inline
+                  disabled={!project.videoUri}
+                  onPress={() => void handleDownload()}
+                />
+              ) : (
+                <Mono>{progress}%</Mono>
+              )}
+            </View>
+          ) : null}
 
           {failed && !needsSignIn ? (
             <Callout
@@ -491,6 +484,11 @@ const styles = StyleSheet.create({
   },
   scrollDark: { backgroundColor: '#302C27' },
   stack: { gap: theme.space.xl },
+  topActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
   editorial: { alignItems: 'center', gap: theme.space.xxl },
   editorialWide: { flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch' },
   editorialNarrow: { flexDirection: 'column' },

@@ -14,11 +14,12 @@ import {
   View,
 } from 'react-native';
 
-import { AppHeader, Button, Container, Screen } from '@/components/ui';
+import { Button, Container, Screen } from '@/components/ui';
 import { STYLE_ICONS, STYLE_TINTS } from '@/constants/style-icons';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
+import { useSidebar } from '@/context/SidebarContext';
 import { DURATIONS, STYLES } from '@/types/project';
 
 const shortcutLabel =
@@ -43,6 +44,7 @@ export default function IdeaScreen() {
     startProject,
   } = useProject();
   const { settings, tap } = useSettings();
+  const { markNavigated } = useSidebar();
   const [skipping, setSkipping] = useState(false);
   const [starting, setStarting] = useState(false);
 
@@ -61,6 +63,7 @@ export default function IdeaScreen() {
     try {
       await startProject();
       tap('success');
+      markNavigated();
       router.push('/interview' as never);
     } catch {
       // Error is already on project context.
@@ -75,6 +78,7 @@ export default function IdeaScreen() {
     try {
       await generateCast({ replace: true });
       tap('success');
+      markNavigated();
       router.push('/cast');
       if (settings.autoGenerateImages) void generateAllCastImages();
     } finally {
@@ -84,7 +88,7 @@ export default function IdeaScreen() {
 
   if (!hydrated) {
     return (
-      <Screen header={<AppHeader />}>
+      <Screen currentStep="Idea">
         <View style={styles.loading}>
           <ActivityIndicator color={theme.textSecondary} />
         </View>
@@ -93,7 +97,7 @@ export default function IdeaScreen() {
   }
 
   return (
-    <Screen header={<AppHeader />}>
+    <Screen currentStep="Idea">
       <KeyboardAvoidingView
         style={styles.fill}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

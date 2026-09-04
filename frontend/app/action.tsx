@@ -13,7 +13,6 @@ import {
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
 import {
-  AppHeader,
   Body,
   Button,
   Callout,
@@ -22,10 +21,7 @@ import {
   GlassCard,
   Mono,
   Screen,
-  SIDEBAR_INSET,
-  StepSidebar,
   Title,
-  useDesktopLayout,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
@@ -37,7 +33,6 @@ const PAGE_PAD = theme.space.xl;
 
 export default function ActionScreen() {
   const router = useRouter();
-  const desktop = useDesktopLayout();
   const {
     project,
     hydrated,
@@ -101,7 +96,7 @@ export default function ActionScreen() {
 
   if (!hydrated || (drafting && frames.length === 0)) {
     return (
-      <Screen header={<AppHeader title="Action" onBack={() => router.push('/places')} />}>
+      <Screen currentStep="Action">
         <View style={styles.loading}>
           <ActivityIndicator color={theme.textSecondary} />
           <Body>Writing the action as a beat sheet…</Body>
@@ -112,7 +107,7 @@ export default function ActionScreen() {
 
   if (frames.length === 0) {
     return (
-      <Screen header={<AppHeader title="Action" onBack={() => router.push('/places')} />}>
+      <Screen currentStep="Action">
         <View style={styles.empty}>
           <Title>No action yet</Title>
           <Body>Draft a readable sequence from the cast and places you kept.</Body>
@@ -125,13 +120,7 @@ export default function ActionScreen() {
 
   return (
     <Screen
-      header={
-        <AppHeader
-          title="Action"
-          onBack={() => router.push('/places')}
-          right={<Mono>{project.durationSec}.0s · {frames.length} beats</Mono>}
-        />
-      }
+      currentStep="Action"
       footer={
         <Button
           label="Looks right → Scenes"
@@ -141,9 +130,7 @@ export default function ActionScreen() {
         />
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
-          <StepSidebar current="Action" />
-
+        <Container style={styles.stack}>
           <View style={styles.headingRow}>
             <View style={styles.headingCopy}>
               <Title>Here&apos;s what happens</Title>

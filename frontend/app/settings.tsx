@@ -1,126 +1,67 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
-  AppHeader,
   Button,
   Caption,
-  CaptionStrong,
   Chip,
   Container,
   Row,
   Screen,
-  Section,
-  TextField,
   Toggle,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
-import { checkHealth, DEFAULT_API_URL } from '@/lib/api';
-import { DURATIONS, STYLES } from '@/types/project';
+import { furthestStepIndex } from '@/lib/project';
+import { STEPS } from '@/types/project';
 
 const BUDGET_OPTIONS = [0, 1, 5, 10, 25];
-
-type HealthState =
-  | { kind: 'idle' }
-  | { kind: 'checking' }
-  | { kind: 'ok'; hasKey: boolean }
-  | { kind: 'error'; message: string };
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { settings, set, tap } = useSettings();
   const { project, setTestMode } = useProject();
-  const [urlDraft, setUrlDraft] = useState(settings.apiUrl);
-  const [health, setHealth] = useState<HealthState>({ kind: 'idle' });
+  const sidebarStep = STEPS[furthestStepIndex(project)];
 
-  async function testConnection() {
-    const url = urlDraft.trim() || DEFAULT_API_URL;
-    set('apiUrl', url);
-    setHealth({ kind: 'checking' });
-
-    try {
-      const response = await checkHealth(url);
-      setHealth({ kind: 'ok', hasKey: !!response.hasKey });
-      tap('success');
-    } catch (error) {
-      setHealth({
-        kind: 'error',
-        message: error instanceof Error ? error.message : 'Could not reach the server',
-      });
-      tap('error');
-    }
+  function save() {
+    tap('success');
+    router.back();
   }
 
   return (
-    <Screen
-      header={<AppHeader title="Settings" onBack={() => router.back()} showSettings={false} showProjectPicker={false} />}
-      footer={<Button label="Done" icon="checkmark" onPress={() => router.back()} />}>
+    <Screen currentStep={sidebarStep}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scroll}>
         <Container style={styles.stack}>
-          <View style={styles.intro}>
-            <CaptionStrong style={styles.kicker}>REEL SETUP</CaptionStrong>
-            <Caption style={styles.introCopy}>
-              Keep the defaults you use every time. Everything else stays close to the work.
-            </Caption>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Settings</Text>
+            <Button label="Save" size="sm" inline onPress={save} />
           </View>
 
-          <Section
-            title="Generation"
-            footnote="These choices are used when you start a new reel.">
-            <Row label="Default look">
-              <View style={styles.chipRow}>
-                {STYLES.map((style) => (
-                  <Chip
-                    key={style}
-                    label={style}
-                    selected={settings.defaultStyle === style}
-                    onPress={() => set('defaultStyle', style)}
-                  />
-                ))}
-              </View>
-            </Row>
-
-            <Row label="Default length">
-              <View style={styles.chipRow}>
-                {DURATIONS.map((duration) => (
-                  <Chip
-                    key={duration}
-                    label={`${duration}s`}
-                    selected={settings.defaultDuration === duration}
-                    onPress={() => set('defaultDuration', duration)}
-                  />
-                ))}
-              </View>
-            </Row>
-
+          <View style={styles.panel}>
             <Row
-              icon="flash-outline"
-              label="Start images automatically"
-              description="Render the next visual set as soon as its plan is ready"
+              icon="flask-outline"
+              iconColor={theme.warning}
+              label="Demo mode"
+              description="Explore the full flow with bundled sample assets"
               right={
                 <Toggle
-                  accessibilityLabel="Start images automatically"
-                  value={settings.autoGenerateImages}
-                  onValueChange={(value) => set('autoGenerateImages', value)}
+                  accessibilityLabel="Demo mode"
+                  value={settings.testMode}
+                  onValueChange={setTestMode}
                 />
               }
             />
-          </Section>
 
-          <Section
-            title="Budget"
-            footnote={`This reel has used $${project.totalCost.toFixed(2)} so far.`}>
+            <View style={styles.rule} />
+
             <Row
               icon="receipt-outline"
               label="Show estimates"
-              description="Show generation cost before and after a render"
+              description="Display generation cost on render screens"
               right={
                 <Toggle
                   accessibilityLabel="Show cost estimates"
@@ -129,6 +70,8 @@ export default function SettingsScreen() {
                 />
               }
             />
+
+            <View style={styles.rule} />
 
             <Row label="Spend cap" description="Pause batch generation at this project total">
               <View style={styles.chipRow}>
@@ -142,133 +85,61 @@ export default function SettingsScreen() {
                 ))}
               </View>
             </Row>
-          </Section>
+          </View>
 
-          <Section title="Connection" footnote="The API address is saved on this device.">
-            <Row label="Studio API">
-              <View style={styles.inputStack}>
-                <TextField
-                  value={urlDraft}
-                  onChangeText={setUrlDraft}
-                  onBlur={() => set('apiUrl', urlDraft.trim() || DEFAULT_API_URL)}
-                  placeholder={DEFAULT_API_URL}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  returnKeyType="done"
-                  onSubmitEditing={testConnection}
-                />
-                <View style={styles.connectionRow}>
-                  <Button
-                    label={health.kind === 'checking' ? 'Checking…' : 'Test connection'}
-                    variant="secondary"
-                    size="sm"
-                    inline
-                    loading={health.kind === 'checking'}
-                    onPress={testConnection}
-                  />
-                  <HealthStatus state={health} />
-                </View>
-              </View>
-            </Row>
-          </Section>
-
-          <Section
-            title="Demo"
-            footnote="Demo mode uses included sample assets and never sends a paid generation request.">
-            <Row
-              icon="flask-outline"
-              iconColor={theme.warning}
-              label="Demo mode"
-              description="Explore the full flow without spending credits"
-              right={
-                <Toggle
-                  accessibilityLabel="Demo mode"
-                  value={settings.testMode}
-                  onValueChange={setTestMode}
-                />
-              }
-            />
-          </Section>
+          <Caption style={styles.hint}>
+            Demo mode never sends a paid generation request. Other changes save automatically.
+          </Caption>
         </Container>
       </ScrollView>
     </Screen>
   );
 }
 
-function HealthStatus({ state }: { state: HealthState }) {
-  if (state.kind === 'idle') return null;
-  if (state.kind === 'checking') return <Caption>Contacting server…</Caption>;
-
-  if (state.kind === 'error') {
-    return (
-      <View style={styles.healthRow}>
-        <Ionicons name="close-circle" size={14} color={theme.danger} />
-        <Caption style={styles.healthError} numberOfLines={2}>
-          {state.message}
-        </Caption>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.healthRow}>
-      <Ionicons
-        name={state.hasKey ? 'checkmark-circle' : 'alert-circle'}
-        size={14}
-        color={state.hasKey ? theme.success : theme.warning}
-      />
-      <CaptionStrong style={{ color: state.hasKey ? theme.success : theme.warning }}>
-        {state.hasKey ? 'Connected' : 'Connected · API key missing'}
-      </CaptionStrong>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: theme.space.xl,
-    paddingTop: theme.space.xl,
+    paddingTop: theme.space.lg,
     paddingBottom: theme.space.xxxl,
   },
   stack: {
-    maxWidth: 760,
-    gap: theme.space.xl,
+    maxWidth: 640,
+    gap: theme.space.lg,
   },
-  intro: {
-    gap: 6,
-    paddingHorizontal: theme.space.xs,
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.space.md,
   },
-  kicker: {
-    fontFamily: theme.font.mono,
-    fontSize: 10,
-    letterSpacing: 1.1,
-    color: theme.accentDark,
+  title: {
+    flex: 1,
+    color: theme.text,
+    fontFamily: theme.font.sans,
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.9,
+    lineHeight: 36,
   },
-  introCopy: {
-    maxWidth: 500,
-    color: theme.textSecondary,
+  panel: {
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+  },
+  rule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.border,
+    marginHorizontal: theme.space.lg,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.space.sm,
   },
-  inputStack: { gap: theme.space.md },
-  connectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: theme.space.md,
-  },
-  healthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    flexShrink: 1,
-  },
-  healthError: {
-    color: theme.danger,
-    flexShrink: 1,
+  hint: {
+    color: theme.textTertiary,
+    paddingHorizontal: theme.space.xs,
   },
 });

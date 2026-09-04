@@ -1,5 +1,6 @@
-import { useAuth, useUser, SignInButton, UserButton } from '@clerk/clerk-react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useAuth, useClerk, useUser } from '@clerk/clerk-react';
+import { Ionicons } from '@expo/vector-icons';
+import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { theme } from '@/constants/theme';
 import { clerkAppearance } from '@/lib/clerk-appearance';
@@ -10,80 +11,82 @@ export function isClerkEnabled(): boolean {
   return Boolean(CLERK_PUBLISHABLE_KEY);
 }
 
-export function AuthControls() {
+/** Sidebar row — sign in or signed-in account. */
+export function SidebarAuth({
+  style,
+  labelStyle,
+}: {
+  style?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
+}) {
   if (!isClerkEnabled()) return null;
-  return <ClerkAuthControls />;
+  return <SidebarClerkAuth style={style} labelStyle={labelStyle} />;
 }
 
-function ClerkAuthControls() {
+function SidebarClerkAuth({
+  style,
+  labelStyle,
+}: {
+  style?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
+}) {
+  const clerk = useClerk();
   const { isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
 
   if (!isLoaded) {
-    return <View style={styles.placeholder} />;
+    return <View style={[styles.row, style, styles.placeholder]} />;
   }
 
   if (isSignedIn) {
+    const label = user?.firstName || user?.primaryEmailAddress?.emailAddress || 'Account';
     return (
-      <View style={styles.signedIn}>
-        {user?.firstName ? (
-          <Text numberOfLines={1} style={styles.greeting}>
-            {user.firstName}
-          </Text>
-        ) : null}
-        <UserButton
-          appearance={{
-            ...clerkAppearance,
-            elements: {
-              avatarBox: { width: 30, height: 30 },
-            },
-          }}
-        />
-      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Account"
+        onPress={() => clerk.openUserProfile({ appearance: clerkAppearance })}
+        style={({ pressed }) => [styles.row, style, pressed && styles.pressed]}>
+        <Ionicons name="person-circle-outline" size={17} color={theme.textSecondary} />
+        <Text numberOfLines={1} style={[styles.label, labelStyle]}>
+          {label}
+        </Text>
+      </Pressable>
     );
   }
 
   return (
-    <SignInButton mode="modal">
-      <View
-        accessibilityRole="button"
-        accessibilityLabel="Sign in"
-        style={styles.signIn}>
-        <Text style={styles.signInText}>Sign in</Text>
-      </View>
-    </SignInButton>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Sign in"
+      onPress={() => clerk.openSignIn({ appearance: clerkAppearance })}
+      style={({ pressed }) => [styles.row, style, pressed && styles.pressed]}>
+      <Ionicons name="person-outline" size={17} color={theme.textSecondary} />
+      <Text style={[styles.label, labelStyle]}>Sign in</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  placeholder: { width: 30, height: 30 },
-  signedIn: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    maxWidth: 140,
-  },
-  greeting: {
-    fontFamily: theme.font.sans,
-    fontSize: 13,
-    color: theme.textSecondary,
-    flexShrink: 1,
-  },
-  signIn: {
-    height: 30,
-    paddingHorizontal: 12,
-    borderRadius: theme.radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.borderStrong,
-    backgroundColor: theme.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minHeight: 32,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: theme.radius.sm,
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  signInText: {
+  label: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.textSecondary,
     fontFamily: theme.font.sans,
     fontSize: 13,
-    fontWeight: '600',
-    color: theme.text,
+    fontWeight: '500',
   },
+  placeholder: {
+    opacity: 0,
+  },
+  pressed: { opacity: 0.64 },
 });

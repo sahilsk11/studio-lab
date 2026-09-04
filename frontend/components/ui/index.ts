@@ -16,7 +16,6 @@ export { StatusBadge } from './StatusBadge';
 export { StepRail } from './StepRail';
 export {
   DESKTOP_BREAKPOINT,
-  SIDEBAR_INSET,
   SIDEBAR_WIDTH,
   StepSidebar,
   useDesktopLayout,

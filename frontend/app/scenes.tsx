@@ -15,7 +15,6 @@ import {
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
 import {
-  AppHeader,
   Body,
   Button,
   Callout,
@@ -27,10 +26,9 @@ import {
   Mono,
   ProgressRail,
   Screen,
-  SIDEBAR_INSET,
+  SIDEBAR_WIDTH,
   Shimmer,
   StatusBadge,
-  StepSidebar,
   Title,
   useDesktopLayout,
 } from '@/components/ui';
@@ -74,7 +72,7 @@ export default function ScenesReviewScreen() {
   const selected = frames.find((frame) => frame.id === selectedId) ?? frames[0];
   const contentWidth = Math.max(
     280,
-    Math.min(width - PAGE_PAD * 2, CONTENT_MAX_WIDTH) - (desktop ? SIDEBAR_INSET : 0),
+    Math.min((desktop ? width - SIDEBAR_WIDTH : width) - PAGE_PAD * 2, CONTENT_MAX_WIDTH),
   );
   const columns = contentWidth >= 840 ? 5 : contentWidth >= 680 ? 4 : contentWidth >= 470 ? 3 : 2;
   const cardWidth = (contentWidth - GAP * (columns - 1)) / columns;
@@ -90,7 +88,7 @@ export default function ScenesReviewScreen() {
 
   if (!hydrated || project.frames.length === 0) {
     return (
-      <Screen header={<AppHeader title="Scenes" onBack={() => router.push('/action')} />}>
+      <Screen currentStep="Scenes">
         <View style={styles.loading}>
           <ActivityIndicator color={theme.textSecondary} />
         </View>
@@ -100,13 +98,7 @@ export default function ScenesReviewScreen() {
 
   return (
     <Screen
-      header={
-        <AppHeader
-          title="Scenes"
-          onBack={() => router.push('/action')}
-          right={<Mono>{progress.done} / {progress.total} ready</Mono>}
-        />
-      }
+      currentStep="Scenes"
       footer={
         outstanding > 0 || rendering ? (
           <Button
@@ -129,9 +121,7 @@ export default function ScenesReviewScreen() {
         )
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
-          <StepSidebar current="Scenes" />
-
+        <Container style={styles.stack}>
           <View style={styles.headingRow}>
             <View style={styles.headingCopy}>
               <Title>The moments that matter</Title>

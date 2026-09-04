@@ -2,40 +2,71 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
+import type { Step } from '@/types/project';
+
 import { Backdrop } from './Backdrop';
+import { StepSidebar, SIDEBAR_WIDTH, useDesktopLayout } from './StepSidebar';
 
 export const CONTENT_MAX_WIDTH = 1120;
 const ACTION_MAX_WIDTH = 760;
 
-/** Safe-area-aware paper shell shared by phone and desktop layouts. */
+/** Safe-area-aware shell with a fixed left sidebar on desktop. */
 export function Screen({
   children,
-  header,
   footer,
   contentStyle,
+  currentStep,
+  sidebarDark = false,
 }: {
   children: React.ReactNode;
-  header?: React.ReactNode;
   footer?: React.ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  currentStep?: Step;
+  sidebarDark?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const desktop = useDesktopLayout();
+  const showDesktopSidebar = Boolean(currentStep && desktop);
 
   return (
     <View style={styles.root}>
       <Backdrop />
 
-      {header ? (
-        <View style={[styles.header, { paddingTop: insets.top }]}>{header}</View>
-      ) : null}
+      <View style={styles.body}>
+        {showDesktopSidebar ? (
+          <View
+            style={[
+              styles.sidebarColumn,
+              {
+                paddingTop: insets.top + theme.space.lg,
+                paddingBottom: Math.max(insets.bottom, theme.space.sm),
+                paddingHorizontal: theme.space.sm,
+              },
+            ]}>
+            <StepSidebar current={currentStep!} dark={sidebarDark} placement="column" />
+          </View>
+        ) : null}
 
-      <View style={[styles.content, contentStyle]}>{children}</View>
+        <View style={[styles.main, !showDesktopSidebar && { paddingTop: insets.top }]}>
+          {!desktop && currentStep ? (
+            <View style={[styles.mobileRail, { paddingTop: insets.top + theme.space.sm }]}>
+              <StepSidebar current={currentStep} dark={sidebarDark} placement="inline" />
+            </View>
+          ) : null}
 
-      {footer ? (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <View style={styles.footerContent}>{footer}</View>
+          <View style={[styles.content, contentStyle]}>{children}</View>
+
+          {footer ? (
+            <View
+              style={[
+                styles.footer,
+                { paddingBottom: Math.max(insets.bottom, theme.space.md) },
+              ]}>
+              <View style={styles.footerContent}>{footer}</View>
+            </View>
+          ) : null}
         </View>
-      ) : null}
+      </View>
     </View>
   );
 }
@@ -59,15 +90,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.bg,
   },
-  header: {
-    backgroundColor: 'rgba(251,248,239,0.96)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.border,
-    zIndex: 10,
-    overflow: 'visible',
+  body: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  sidebarColumn: {
+    width: SIDEBAR_WIDTH,
+    flexShrink: 0,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  main: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'column',
+  },
+  mobileRail: {
+    paddingHorizontal: theme.space.xl,
   },
   content: { flex: 1 },
   footer: {
+    justifyContent: 'center',
     paddingTop: theme.space.md,
     paddingHorizontal: theme.space.xl,
     backgroundColor: theme.bg,
@@ -77,7 +121,7 @@ const styles = StyleSheet.create({
   footerContent: {
     width: '100%',
     maxWidth: ACTION_MAX_WIDTH,
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     gap: theme.space.md,
   },
   containerOuter: {

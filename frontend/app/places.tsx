@@ -14,7 +14,6 @@ import {
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
 import {
-  AppHeader,
   Body,
   Button,
   Callout,
@@ -25,16 +24,14 @@ import {
   GlassCard,
   Mono,
   Screen,
-  SIDEBAR_INSET,
+  SIDEBAR_WIDTH,
   StatusBadge,
-  StepSidebar,
   Title,
   useDesktopLayout,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
-import { imageProgress, needsImage } from '@/lib/project';
 import type { Project, Scene } from '@/types/project';
 
 const GAP = theme.space.md;
@@ -49,8 +46,6 @@ export default function PlacesScreen() {
     hydrated,
     testMode,
     error,
-    generateSceneImage,
-    generateAllSceneImages,
     generateFrames,
     generateImage,
     updateItem,
@@ -63,13 +58,10 @@ export default function PlacesScreen() {
 
   const contentWidth = Math.max(
     280,
-    Math.min(width - PAGE_PAD * 2, CONTENT_MAX_WIDTH) - (desktop ? SIDEBAR_INSET : 0),
+    Math.min((desktop ? width - SIDEBAR_WIDTH : width) - PAGE_PAD * 2, CONTENT_MAX_WIDTH),
   );
   const columns = contentWidth >= 940 ? 3 : contentWidth >= 680 ? 2 : 1;
   const cardWidth = (contentWidth - GAP * (columns - 1)) / columns;
-  const progress = imageProgress(project.scenes);
-  const outstanding = progress.pending + progress.stale + progress.errors;
-  const ready = progress.total > 0 && outstanding === 0 && progress.generating === 0;
 
   useEffect(() => {
     if (!hydrated) return;
@@ -100,7 +92,7 @@ export default function PlacesScreen() {
 
   if (!hydrated || (project.scenes.length === 0 && !testMode)) {
     return (
-      <Screen header={<AppHeader title="Places" onBack={() => router.push('/cast')} />}>
+      <Screen currentStep="Places">
         <View style={styles.loading}>
           <ActivityIndicator color={theme.textSecondary} />
         </View>
@@ -110,36 +102,20 @@ export default function PlacesScreen() {
 
   return (
     <Screen
-      header={
-        <AppHeader
-          title="Places"
-          onBack={() => router.push('/cast')}
-          right={<Mono>{kept.length} of {project.scenes.length} kept</Mono>}
-        />
-      }
+      currentStep="Places"
       footer={
-        outstanding > 0 ? (
-          <Button
-            label={`Render ${outstanding} place${outstanding === 1 ? '' : 's'}`}
-            icon="sparkles"
-            size="lg"
-            onPress={() => void generateAllSceneImages()}
-          />
-        ) : (
-          <Button
-            label="Keep all → Action"
-            iconRight="arrow-forward"
-            size="lg"
-            disabled={!ready || advancing}
-            loading={advancing}
-            onPress={() => void handleNext()}
-          />
-        )
+        <Button
+          label="Next: Action"
+          iconRight="arrow-forward"
+          size="lg"
+          inline
+          disabled={advancing}
+          loading={advancing}
+          onPress={() => void handleNext()}
+        />
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.stack, desktop && { paddingLeft: SIDEBAR_INSET }]}>
-          <StepSidebar current="Places" />
-
+        <Container style={styles.stack}>
           <View style={styles.heading}>
             <Title>Where it happens</Title>
             <Body style={styles.subhead}>
@@ -175,7 +151,6 @@ export default function PlacesScreen() {
                   );
                 }}
                 onEdit={() => setEditing({ kind: 'scene', item: scene })}
-                onRender={() => void generateSceneImage(scene.id)}
               />
             ))}
           </View>
@@ -202,7 +177,6 @@ function PlaceCard({
   showCost,
   onToggleKeep,
   onEdit,
-  onRender,
 }: {
   scene: Scene;
   project: Project;
@@ -212,9 +186,7 @@ function PlaceCard({
   showCost: boolean;
   onToggleKeep: () => void;
   onEdit: () => void;
-  onRender: () => void;
 }) {
-  const generating = scene.imageStatus === 'generating';
   const canKeep = scene.imageStatus === 'done' && !scene.imageStale;
   const names = [
     ...scene.peopleIds.map((id) => project.people.find((person) => person.id === id)?.name),
@@ -259,27 +231,16 @@ function PlaceCard({
         {showCost && scene.imageCost ? <Mono>${scene.imageCost.toFixed(2)} image</Mono> : null}
 
         <View style={styles.actions}>
-          {needsImage(scene) || generating ? (
-            <Button
-              label={scene.imageStatus === 'error' ? 'Retry' : scene.imageStale ? 'Re-render' : 'Render'}
-              icon="sparkles"
-              size="sm"
-              loading={generating}
-              onPress={onRender}
-              style={styles.flex}
-            />
-          ) : (
-            <Button
-              label={kept ? 'Kept' : 'Keep'}
-              icon={kept ? 'checkmark' : 'add'}
-              size="sm"
-              variant={kept ? 'secondary' : 'primary'}
-              disabled={!canKeep}
-              onPress={onToggleKeep}
-              style={styles.flex}
-            />
-          )}
-          <Button label="Tune" icon="options-outline" size="sm" variant="ghost" onPress={onEdit} />
+          <Button
+            label={kept ? 'Kept' : 'Keep'}
+            icon={kept ? 'checkmark' : undefined}
+            size="sm"
+            variant={kept ? 'secondary' : 'primary'}
+            disabled={!canKeep}
+            onPress={onToggleKeep}
+            style={styles.flex}
+          />
+          <Button label="Edit" icon="create-outline" size="sm" variant="ghost" onPress={onEdit} />
         </View>
       </View>
     </GlassCard>

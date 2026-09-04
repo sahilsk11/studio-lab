@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   railVertical: {
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 3,
+    gap: 1,
   },
   railHorizontal: {
     flexDirection: 'row',
@@ -127,11 +127,11 @@ const styles = StyleSheet.create({
   },
   itemVertical: {
     width: '100%',
-    minHeight: 38,
+    minHeight: 32,
     flexDirection: 'row',
     justifyContent: 'flex-start',
     paddingHorizontal: 10,
-    gap: 10,
+    gap: 8,
   },
   itemFuture: {
     opacity: 1,
@@ -169,16 +169,16 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: theme.font.sans,
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '500',
-    color: theme.textTertiary,
+    color: theme.textSecondary,
   },
   labelDark: { color: '#AAA095' },
   labelDone: { color: theme.textSecondary },
   labelDoneDark: { color: '#E4D9CC' },
   labelCurrent: {
-    color: theme.accentDark,
-    fontWeight: '700',
+    color: theme.text,
+    fontWeight: '600',
   },
   labelFuture: { color: theme.textQuaternary },
   labelFutureDark: { color: '#7D746A' },

@@ -13,7 +13,7 @@ export function stepRoute(step: Step): string {
   switch (step) {
     case 'Idea':
       return '/';
-    case 'Interview':
+    case 'Clarify project':
       return '/interview';
     case 'Cast':
       return '/cast';

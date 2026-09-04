@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -14,19 +14,10 @@ import {
 } from 'react-native';
 
 import { ItemEditor, type EditorTarget } from '@/components/ItemEditor';
-import {
-  AppHeader,
-  Button,
-  Container,
-  Screen,
-  SIDEBAR_INSET,
-  StepSidebar,
-  useDesktopLayout,
-} from '@/components/ui';
+import { Button, Container, Screen } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
-import { castItems, imageProgress } from '@/lib/project';
 import type { Person, Thing } from '@/types/project';
 
 type CastSelection =
@@ -41,9 +32,6 @@ export default function CastScreen() {
     hydrated,
     testMode,
     error,
-    generatePersonImage,
-    generateThingImage,
-    generateAllCastImages,
     generateScenes,
     generateAllSceneImages,
     generateImage,
@@ -51,46 +39,22 @@ export default function CastScreen() {
     removeItem,
   } = useProject();
   const { settings, tap } = useSettings();
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [kept, setKept] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [advancing, setAdvancing] = useState(false);
 
   const compact = width < 700;
-  const desktop = useDesktopLayout();
   const empty = project.people.length === 0 && project.things.length === 0;
-  const items = useMemo<CastSelection[]>(
-    () => [
-      ...project.people.map((item) => ({ kind: 'person' as const, item })),
-      ...project.things.map((item) => ({ kind: 'thing' as const, item })),
-    ],
-    [project.people, project.things],
-  );
-  const selected = items.find(({ kind, item }) => `${kind}:${item.id}` === selectedKey) ?? items[0];
-  const progress = imageProgress(castItems(project));
-  const pending = progress.pending + progress.stale + progress.errors;
+  const people: CastSelection[] = project.people.map((item) => ({ kind: 'person', item }));
+  const objects: CastSelection[] = project.things.map((item) => ({ kind: 'thing', item }));
 
   useEffect(() => {
     if (!hydrated) return;
     if (empty && !testMode) router.replace('/');
   }, [empty, hydrated, router, testMode]);
 
-  useEffect(() => {
-    if (
-      items[0] &&
-      !items.some(({ kind, item }) => `${kind}:${item.id}` === selectedKey)
-    ) {
-      setSelectedKey(`${items[0].kind}:${items[0].item.id}`);
-    }
-  }, [items, selectedKey]);
-
   function keyFor(selection: CastSelection) {
     return `${selection.kind}:${selection.item.id}`;
-  }
-
-  function generate(selection: CastSelection) {
-    if (selection.kind === 'person') return generatePersonImage(selection.item.id);
-    return generateThingImage(selection.item.id);
   }
 
   function toggleKeep(selection: CastSelection) {
@@ -117,9 +81,9 @@ export default function CastScreen() {
     }
   }
 
-  if (!hydrated || !selected) {
+  if (!hydrated || empty) {
     return (
-      <Screen header={<AppHeader title="Cast" onBack={() => router.push('/interview')} />}>
+      <Screen currentStep="Cast">
         <View style={styles.loading}>
           <ActivityIndicator color={theme.textSecondary} />
         </View>
@@ -129,55 +93,23 @@ export default function CastScreen() {
 
   return (
     <Screen
-      header={
-        <AppHeader
-          title="Cast"
-          onBack={() => router.push('/interview')}
-          right={
-            pending > 0 ? (
-              <Button
-                label={`Render ${pending}`}
-                size="sm"
-                variant="secondary"
-                inline
-                onPress={() => void generateAllCastImages()}
-              />
-            ) : undefined
-          }
-        />
-      }
+      currentStep="Cast"
       footer={
-        <View style={[styles.footer, compact && styles.footerCompact]}>
-          <Button
-            label="Next: Places"
-            iconRight="arrow-forward"
-            size="lg"
-            inline={!compact}
-            loading={advancing}
-            disabled={advancing}
-            onPress={() => void openPlaces()}
-          />
-          <Text style={styles.footerNote}>
-            {kept.size > 0
-              ? `${kept.size} of ${items.length} kept`
-              : 'You can tune or render any card later.'}
-          </Text>
-        </View>
+        <Button
+          label="Next: Places"
+          iconRight="arrow-forward"
+          size="lg"
+          inline
+          loading={advancing}
+          disabled={advancing}
+          onPress={() => void openPlaces()}
+        />
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.container, desktop && { paddingLeft: SIDEBAR_INSET }]}>
-          <StepSidebar current="Cast" />
-
-          <View style={[styles.heading, compact && styles.headingCompact]}>
-            <View style={styles.headingCopy}>
-              <Text style={styles.title}>Meet the cast</Text>
-              <Text style={styles.subtitle}>
-                The whole set, at a useful size. Select a card to inspect its visual rules.
-              </Text>
-            </View>
-            <Text style={styles.readout}>
-              {progress.done}/{progress.total} sheets ready
-            </Text>
+        <Container style={styles.container}>
+          <View style={styles.heading}>
+            <Text style={styles.title}>Meet the cast</Text>
+            <Text style={styles.subtitle}>Keep the ones you want, or edit any card before moving on.</Text>
           </View>
 
           {error ? (
@@ -187,95 +119,29 @@ export default function CastScreen() {
             </View>
           ) : null}
 
-          <View style={[styles.castGrid, compact && styles.castGridCompact]}>
-            {items.map((selection) => {
-              const key = keyFor(selection);
-              return (
-                <CastCard
-                  key={key}
-                  selection={selection}
-                  selected={key === keyFor(selected)}
-                  kept={kept.has(key)}
-                  compact={compact}
-                  onSelect={() => {
-                    tap('light');
-                    setSelectedKey(key);
-                  }}
-                  onKeep={() => toggleKeep(selection)}
-                  onRender={() => void generate(selection)}
-                />
-              );
-            })}
-          </View>
+          {people.length > 0 ? (
+            <CastSection
+              title="Cast"
+              selections={people}
+              kept={kept}
+              compact={compact}
+              keyFor={keyFor}
+              onKeep={toggleKeep}
+              onEdit={setEditing}
+            />
+          ) : null}
 
-          <View style={[styles.detailPanel, compact && styles.detailPanelCompact]}>
-            <View style={[styles.selectionPanel, compact && styles.selectionPanelCompact]}>
-              <Text style={styles.eyebrow}>SELECTED · {selected.item.name.toUpperCase()}</Text>
-              <View style={styles.previewRow}>
-                {selected.item.imageUri ? (
-                  <Image
-                    source={{ uri: selected.item.imageUri }}
-                    resizeMode="contain"
-                    style={styles.detailImage}
-                    accessibilityLabel={`${selected.item.name} reference sheet`}
-                  />
-                ) : (
-                  <PatternPreview status={selected.item.imageStatus} />
-                )}
-              </View>
-              <Text style={styles.sourceNote}>
-                {selected.kind === 'person' ? 'front · three-quarter · detail' : 'primary · reverse'}
-              </Text>
-            </View>
-
-            <View style={[styles.attributesPanel, compact && styles.attributesPanelCompact]}>
-              <Text style={styles.eyebrow}>ATTRIBUTES</Text>
-              <Text style={styles.detailTitle}>{selected.item.name}</Text>
-              {'role' in selected.item ? (
-                <Text style={styles.role}>{selected.item.role}</Text>
-              ) : null}
-              <View style={styles.attributeChips}>
-                {attributesFor(selected.item.look).map((attribute) => (
-                  <View key={attribute} style={styles.attributeChip}>
-                    <Text style={styles.attributeText}>{attribute}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.lookText}>{selected.item.look}</Text>
-              <View style={styles.panelActions}>
-                <Button
-                  label={kept.has(keyFor(selected)) ? 'Kept' : `Keep ${selected.item.name}`}
-                  size="sm"
-                  inline
-                  onPress={() => toggleKeep(selected)}
-                />
-                <Button
-                  label="Tune details"
-                  size="sm"
-                  variant="secondary"
-                  inline
-                  onPress={() => setEditing(selected)}
-                />
-              </View>
-            </View>
-
-            <View style={[styles.biblePanel, compact && styles.biblePanelCompact]}>
-              <Text style={styles.eyebrow}>VISUAL BIBLE</Text>
-              <View style={styles.bibleMeta}>
-                <BibleTag label={project.style} />
-                <BibleTag label={`${project.durationSec}s`} />
-                <BibleTag label="9:16 vertical" />
-              </View>
-              <Text style={styles.bibleText}>
-                {project.styleNotes ||
-                  `${project.style} treatment with a consistent palette, lighting direction, lens language, and material finish across every sheet.`}
-              </Text>
-              <View style={styles.bibleRule} />
-              <Text style={styles.bibleCaption}>
-                Shared by cast, places, action, and every final scene.
-              </Text>
-            </View>
-          </View>
+          {objects.length > 0 ? (
+            <CastSection
+              title="Objects"
+              selections={objects}
+              kept={kept}
+              compact={compact}
+              keyFor={keyFor}
+              onKeep={toggleKeep}
+              onEdit={setEditing}
+            />
+          ) : null}
         </Container>
       </ScrollView>
 
@@ -290,69 +156,93 @@ export default function CastScreen() {
   );
 }
 
-function CastCard({
-  selection,
-  selected,
+function CastSection({
+  title,
+  selections,
   kept,
   compact,
-  onSelect,
+  keyFor,
   onKeep,
-  onRender,
+  onEdit,
+}: {
+  title: string;
+  selections: CastSelection[];
+  kept: Set<string>;
+  compact: boolean;
+  keyFor: (selection: CastSelection) => string;
+  onKeep: (selection: CastSelection) => void;
+  onEdit: (selection: CastSelection) => void;
+}) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={[styles.castGrid, compact && styles.castGridCompact]}>
+        {selections.map((selection) => {
+          const key = keyFor(selection);
+          return (
+            <CastCard
+              key={key}
+              selection={selection}
+              kept={kept.has(key)}
+              compact={compact}
+              onKeep={() => onKeep(selection)}
+              onEdit={() => onEdit(selection)}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function CastCard({
+  selection,
+  kept,
+  compact,
+  onKeep,
+  onEdit,
 }: {
   selection: CastSelection;
-  selected: boolean;
   kept: boolean;
   compact: boolean;
-  onSelect: () => void;
   onKeep: () => void;
-  onRender: () => void;
+  onEdit: () => void;
 }) {
   const { item } = selection;
 
   return (
-    <View
-      style={[
-        styles.castCard,
-        compact && styles.castCardCompact,
-        selected && styles.castCardSelected,
-      ]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ selected }}
-        accessibilityLabel={`Select ${item.name}`}
-        onPress={onSelect}
-        style={({ pressed }) => pressed && styles.pressed}>
-        <View style={styles.cardImage}>
-          {item.imageUri ? (
-            <Image source={{ uri: item.imageUri }} resizeMode="contain" style={StyleSheet.absoluteFill} />
-          ) : (
-            <PatternPreview status={item.imageStatus} />
-          )}
-          {kept ? (
-            <View style={styles.keptBadge}>
-              <Ionicons name="checkmark" size={11} color={theme.surface} />
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.cardBody}>
-          <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.cardKind} numberOfLines={1}>
-              {'role' in item ? item.role : 'object'}
-            </Text>
+    <View style={[styles.castCard, compact && styles.castCardCompact]}>
+      <View style={styles.cardImage}>
+        {item.imageUri ? (
+          <Image source={{ uri: item.imageUri }} resizeMode="contain" style={StyleSheet.absoluteFill} />
+        ) : (
+          <PatternPreview status={item.imageStatus} />
+        )}
+        {kept ? (
+          <View style={styles.keptBadge}>
+            <Ionicons name="checkmark" size={11} color={theme.surface} />
           </View>
-          <Text style={styles.cardLook} numberOfLines={2}>{item.look}</Text>
-          {item.imageError ? <Text style={styles.cardError} numberOfLines={1}>{item.imageError}</Text> : null}
+        ) : null}
+      </View>
+
+      <View style={styles.cardBody}>
+        <View style={styles.cardTitleRow}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={styles.cardKind} numberOfLines={1}>
+            {'role' in item ? item.role : 'object'}
+          </Text>
         </View>
-      </Pressable>
+        <Text style={styles.cardLook} numberOfLines={2}>
+          {item.look}
+        </Text>
+        {item.imageError ? <Text style={styles.cardError} numberOfLines={1}>{item.imageError}</Text> : null}
+      </View>
+
       <View style={styles.cardActions}>
         <MiniAction label={kept ? 'Kept' : 'Keep'} primary={!kept} onPress={onKeep} />
-        <MiniAction
-          label={item.imageStatus === 'generating' ? 'Drawing…' : item.imageUri ? 'Redo' : 'Render'}
-          disabled={item.imageStatus === 'generating'}
-          onPress={onRender}
-        />
+        <MiniAction label="Edit" onPress={onEdit} />
       </View>
     </View>
   );
@@ -368,7 +258,7 @@ function PatternPreview({ status }: { status: Person['imageStatus'] }) {
           <Ionicons name="images-outline" size={22} color={theme.textTertiary} />
         )}
         <Text style={styles.patternText}>
-          {status === 'generating' ? 'drawing now…' : 'ready to render'}
+          {status === 'generating' ? 'drawing now…' : 'sheet pending'}
         </Text>
       </View>
     </View>
@@ -391,10 +281,7 @@ function MiniAction({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={(event) => {
-        event.stopPropagation();
-        onPress();
-      }}
+      onPress={onPress}
       style={({ pressed }) => [
         styles.miniAction,
         primary && styles.miniActionPrimary,
@@ -406,23 +293,6 @@ function MiniAction({
   );
 }
 
-function BibleTag({ label }: { label: string }) {
-  return (
-    <View style={styles.bibleTag}>
-      <Text style={styles.bibleTagText}>{label}</Text>
-    </View>
-  );
-}
-
-function attributesFor(look: string) {
-  const attributes = [...new Set(look
-    .split(/[,;.]|\band\b/i)
-    .map((part) => part.trim())
-    .filter((part) => part.length >= 3 && part.length <= 30)
-    .slice(0, 5))];
-  return attributes.length > 0 ? attributes : ['consistent silhouette', 'locked palette'];
-}
-
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: {
@@ -431,9 +301,7 @@ const styles = StyleSheet.create({
     paddingBottom: theme.space.xxxl,
   },
   container: { maxWidth: 1120, gap: theme.space.xl },
-  heading: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.xl },
-  headingCompact: { flexDirection: 'column', alignItems: 'flex-start' },
-  headingCopy: { flex: 1, gap: 5 },
+  heading: { gap: 5 },
   title: {
     color: theme.text,
     fontFamily: theme.font.sans,
@@ -449,7 +317,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
-  readout: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 11 },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -461,6 +328,15 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm,
   },
   errorText: { flex: 1, color: theme.danger, fontFamily: theme.font.sans, fontSize: 13 },
+  section: { gap: theme.space.md },
+  sectionTitle: {
+    color: theme.textTertiary,
+    fontFamily: theme.font.mono,
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
   castGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: theme.space.md },
   castGridCompact: { flexDirection: 'column', flexWrap: 'nowrap' },
   castCard: {
@@ -471,17 +347,8 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     borderWidth: 1,
     borderRadius: theme.radius.md,
-    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
   castCardCompact: { width: '100%', minWidth: 0 },
-  castCardSelected: {
-    borderColor: theme.accent,
-    borderWidth: 1.5,
-    ...Platform.select({
-      web: { boxShadow: `0 0 0 3px ${theme.accentSoft}` },
-      default: { shadowColor: theme.accent, shadowOpacity: 0.14, shadowRadius: 8 },
-    }),
-  },
   cardImage: {
     height: 124,
     overflow: 'hidden',
@@ -539,6 +406,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 7,
     backgroundColor: theme.bgElevated,
+    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
   miniActionPrimary: { backgroundColor: theme.accent, borderColor: theme.accent },
   miniActionDisabled: { opacity: 0.45 },
@@ -549,97 +417,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   miniActionTextPrimary: { color: theme.surface },
-  detailPanel: {
-    minHeight: 238,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    backgroundColor: theme.surface,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: theme.radius.md,
-  },
-  detailPanelCompact: { flexDirection: 'column' },
-  selectionPanel: {
-    width: 290,
-    padding: theme.space.lg,
-    gap: theme.space.md,
-    borderRightColor: theme.border,
-    borderRightWidth: 1,
-  },
-  selectionPanelCompact: {
-    width: '100%',
-    borderRightWidth: 0,
-    borderBottomColor: theme.border,
-    borderBottomWidth: 1,
-  },
-  eyebrow: {
-    color: theme.textTertiary,
-    fontFamily: theme.font.mono,
-    fontSize: 10,
-    letterSpacing: 1,
-  },
-  previewRow: { flex: 1, minHeight: 138, overflow: 'hidden', borderRadius: theme.radius.sm },
-  detailImage: { width: '100%', height: '100%', backgroundColor: theme.surfaceMuted },
-  sourceNote: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 10.5 },
-  attributesPanel: {
-    flex: 1,
-    minWidth: 250,
-    padding: theme.space.lg,
-    gap: theme.space.md,
-    borderRightColor: theme.border,
-    borderRightWidth: 1,
-  },
-  attributesPanelCompact: {
-    minWidth: 0,
-    borderRightWidth: 0,
-    borderBottomColor: theme.border,
-    borderBottomWidth: 1,
-  },
-  detailTitle: {
-    color: theme.text,
-    fontFamily: theme.font.sans,
-    fontSize: 21,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-  },
-  role: { marginTop: -8, color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 11 },
-  attributeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  attributeChip: {
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: theme.borderStrong,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.bgElevated,
-  },
-  attributeText: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 12.5 },
-  lookText: {
-    color: theme.textSecondary,
-    fontFamily: theme.font.sans,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  panelActions: { marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.sm },
-  biblePanel: { width: 260, padding: theme.space.lg, gap: theme.space.md, backgroundColor: theme.surfaceMuted },
-  biblePanelCompact: { width: '100%' },
-  bibleMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  bibleTag: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
-    borderColor: theme.border,
-    backgroundColor: theme.surface,
-  },
-  bibleTagText: { color: theme.textSecondary, fontFamily: theme.font.mono, fontSize: 10.5 },
-  bibleText: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 13, lineHeight: 19 },
-  bibleRule: { height: 1, backgroundColor: theme.border },
-  bibleCaption: { color: theme.textTertiary, fontFamily: theme.font.sans, fontSize: 11.5, lineHeight: 17 },
   pattern: { flex: 1, backgroundColor: theme.surfaceMuted },
   patternLabel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
   patternText: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 10 },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: theme.space.lg },
-  footerCompact: { flexDirection: 'column', alignItems: 'stretch' },
-  footerNote: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 13 },
   pressed: { opacity: 0.65 },
 });

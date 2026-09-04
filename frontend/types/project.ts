@@ -99,7 +99,7 @@ export const DURATIONS = [15, 30, 60] as const;
 
 export const STEPS = [
   'Idea',
-  'Interview',
+  'Clarify project',
   'Cast',
   'Places',
   'Action',

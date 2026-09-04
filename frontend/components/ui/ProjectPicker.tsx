@@ -9,14 +9,14 @@ import { useSettings } from '@/context/SettingsContext';
 import { furthestStepIndex, stepRoute } from '@/lib/project';
 import { STEPS } from '@/types/project';
 
-export function ProjectPicker() {
+export function ProjectPicker({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
-  const { project, projects, activeProjectId, testMode, selectProject, startFresh } = useProject();
+  const { project, projects, activeProjectId, selectProject, startFresh } = useProject();
   const { tap } = useSettings();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<View>(null);
 
-  const label = project.title.trim() || (activeProjectId ? 'Untitled reel' : 'New project');
+  const label = project.title.trim() || 'New project';
   const named = projects.filter((item) => item.title.trim());
 
   useEffect(() => {
@@ -48,8 +48,14 @@ export function ProjectPicker() {
     router.replace('/');
   }
 
+  function goHome() {
+    tap('light');
+    setOpen(false);
+    router.replace('/');
+  }
+
   return (
-    <View ref={rootRef} style={styles.root}>
+    <View ref={rootRef} style={[styles.root, compact && styles.rootCompact]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Project: ${label}`}
@@ -58,11 +64,12 @@ export function ProjectPicker() {
           tap('light');
           setOpen((value) => !value);
         }}
+        onLongPress={() => goHome()}
         style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}>
-        <Text numberOfLines={1} style={styles.triggerLabel}>
+        <Text numberOfLines={1} style={styles.nameLabel}>
           {label}
         </Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={12} color={theme.textTertiary} />
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={theme.textSecondary} />
       </Pressable>
 
       {open ? (
@@ -91,7 +98,7 @@ export function ProjectPicker() {
             accessibilityRole="menuitem"
             onPress={createNew}
             style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
-            <Text style={styles.createLabel}>{testMode ? 'New demo' : 'Create new'}</Text>
+            <Text style={styles.createLabel}>New project</Text>
           </Pressable>
         </View>
       ) : null}
@@ -102,26 +109,27 @@ export function ProjectPicker() {
 const styles = StyleSheet.create({
   root: {
     position: 'relative',
-    zIndex: 20,
+    zIndex: 30,
+    width: '100%',
+  },
+  rootCompact: {
     maxWidth: 280,
-    flexShrink: 1,
   },
   trigger: {
+    width: '100%',
     minHeight: 32,
-    maxWidth: 280,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.borderStrong,
     backgroundColor: theme.bgElevated,
     ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
   },
-  triggerLabel: {
-    flexShrink: 1,
+  nameLabel: {
+    flex: 1,
+    minWidth: 0,
     color: theme.text,
     fontFamily: theme.font.sans,
     fontSize: 13,
@@ -129,16 +137,16 @@ const styles = StyleSheet.create({
   },
   menu: {
     position: 'absolute',
-    top: 38,
+    top: '100%',
     left: 0,
-    minWidth: 220,
-    maxWidth: 320,
+    right: 0,
+    marginTop: 6,
     paddingVertical: 6,
     backgroundColor: theme.surface,
     borderColor: theme.borderStrong,
     borderWidth: 1,
     borderRadius: theme.radius.sm,
-    zIndex: 30,
+    zIndex: 40,
     ...Platform.select({
       web: { boxShadow: '0 8px 24px rgba(48,44,39,0.12)' },
       default: theme.shadow.sm,

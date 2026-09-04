@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -13,17 +13,14 @@ import {
 } from 'react-native';
 
 import {
-  AppHeader,
   Button,
   Container,
   Screen,
-  SIDEBAR_INSET,
-  StepSidebar,
-  useDesktopLayout,
 } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProject } from '@/context/ProjectContext';
 import { useSettings } from '@/context/SettingsContext';
+import { useSidebar } from '@/context/SidebarContext';
 
 type Question = {
   id: 'feel' | 'setting' | 'cast' | 'ending';
@@ -96,22 +93,25 @@ export default function InterviewScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const {
-    project,
     hydrated,
     error,
     generateCast,
     generateAllCastImages,
   } = useProject();
   const { settings, tap } = useSettings();
+  const { markNavigated } = useSidebar();
   const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
   const [creating, setCreating] = useState(false);
 
   const compact = width < 720;
-  const desktop = useDesktopLayout();
   const answered = useMemo(
     () => QUESTIONS.filter((question) => answers[question.id].length > 0).length,
     [answers],
   );
+
+  useEffect(() => {
+    markNavigated();
+  }, [markNavigated]);
 
   function choose(question: Question, option: string) {
     tap('light');
@@ -142,7 +142,7 @@ export default function InterviewScreen() {
 
   if (!hydrated) {
     return (
-      <Screen header={<AppHeader title="Interview" onBack={() => router.push('/')} />}>
+      <Screen currentStep="Clarify project">
         <View style={styles.loading}>
           <ActivityIndicator color={theme.textSecondary} />
         </View>
@@ -152,61 +152,29 @@ export default function InterviewScreen() {
 
   return (
     <Screen
-      header={
-        <AppHeader
-          title={project.title || 'Interview'}
-          onBack={() => router.push('/')}
-        />
-      }
+      currentStep="Clarify project"
       footer={
         <View style={[styles.footer, compact && styles.footerCompact]}>
           <Button
             label={answered === 4 ? 'Create cast' : `Answer ${4 - answered} more`}
             iconRight="arrow-forward"
             loading={creating}
-            disabled={answered < 4}
-            inline={!compact}
+            disabled={answered < 4 || creating}
+            inline
             onPress={() => void createCast()}
           />
-          <Text style={styles.footerHint}>{answered} of 4 answered</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ busy: creating }}
+          <Button
+            label="Pick for me"
+            variant="secondary"
+            inline
+            loading={creating}
             disabled={creating}
             onPress={() => void createCast()}
-            style={({ pressed }) => [styles.goodEnough, pressed && styles.pressed]}>
-            <Text style={styles.goodEnoughText}>Good enough — go to Cast</Text>
-          </Pressable>
+          />
         </View>
       }>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Container style={[styles.container, desktop && { paddingLeft: SIDEBAR_INSET }]}>
-          <StepSidebar current="Interview" />
-
-          <View style={[styles.heading, compact && styles.headingCompact]}>
-            <View style={styles.headingCopy}>
-              <Text style={styles.title}>Four quick calls</Text>
-              <Text style={styles.subtitle}>
-                Pick the closest option. Nothing here is final, and you can answer in any order.
-              </Text>
-            </View>
-            <View style={styles.progressBlock}>
-              <View style={styles.progressBars}>
-                {QUESTIONS.map((question, index) => (
-                  <View
-                    key={question.id}
-                    style={[
-                      styles.progressBar,
-                      answers[question.id].length > 0 && styles.progressAnswered,
-                      index === answered && answered < 4 && styles.progressCurrent,
-                    ]}
-                  />
-                ))}
-              </View>
-              <Text style={styles.counter}>{answered} / 4</Text>
-            </View>
-          </View>
-
+        <Container style={styles.container}>
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <View style={[styles.sheet, compact && styles.sheetCompact]}>
@@ -299,30 +267,7 @@ const styles = StyleSheet.create({
     paddingTop: theme.space.sm,
     paddingBottom: theme.space.xxxl,
   },
-  container: { maxWidth: 1120, gap: theme.space.xl },
-  heading: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.xl },
-  headingCompact: { alignItems: 'flex-start', flexDirection: 'column' },
-  headingCopy: { flex: 1, gap: 5 },
-  title: {
-    color: theme.text,
-    fontFamily: theme.font.sans,
-    fontSize: 29,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    lineHeight: 34,
-  },
-  subtitle: {
-    color: theme.textSecondary,
-    fontFamily: theme.font.sans,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  progressBlock: { flexDirection: 'row', alignItems: 'center', gap: theme.space.sm },
-  progressBars: { flexDirection: 'row', gap: 4 },
-  progressBar: { width: 27, height: 3, borderRadius: 2, backgroundColor: theme.border },
-  progressAnswered: { backgroundColor: theme.info },
-  progressCurrent: { backgroundColor: theme.accent },
-  counter: { color: theme.textTertiary, fontFamily: theme.font.mono, fontSize: 11 },
+  container: { maxWidth: 1120, gap: theme.space.md },
   error: { color: theme.danger, fontFamily: theme.font.sans, fontSize: 13 },
   sheet: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: theme.space.md },
   sheetCompact: { flexDirection: 'column', flexWrap: 'nowrap' },
@@ -399,22 +344,7 @@ const styles = StyleSheet.create({
     borderColor: theme.borderStrong,
   },
   checkSelected: { backgroundColor: theme.accent, borderColor: theme.accent },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: theme.space.lg },
-  footerCompact: { flexDirection: 'column', alignItems: 'stretch', gap: theme.space.sm },
-  footerHint: { color: theme.textSecondary, fontFamily: theme.font.sans, fontSize: 13 },
-  goodEnough: {
-    marginLeft: 'auto',
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.space.sm,
-    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
-  },
-  goodEnoughText: {
-    color: theme.textSecondary,
-    fontFamily: theme.font.sans,
-    fontSize: 13.5,
-    textDecorationLine: 'underline',
-  },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: theme.space.md },
+  footerCompact: { flexWrap: 'wrap' },
   pressed: { opacity: 0.62 },
 });

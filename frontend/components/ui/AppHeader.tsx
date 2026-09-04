@@ -1,82 +1,66 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/constants/theme';
+import { useSidebar } from '@/context/SidebarContext';
 import { useSettings } from '@/context/SettingsContext';
 import { IconButton } from './Button';
 import { Container } from './Screen';
-import { ProjectPicker } from './ProjectPicker';
 import { AuthControls } from './AuthControls';
+import { useDesktopLayout } from './StepSidebar';
 
-export function BrandMark({ size = 20 }: { size?: number }) {
-  return <Ionicons name="videocam-outline" size={size} color={theme.accent} accessibilityLabel="Reel" />;
+export function BrandMark() {
+  return (
+    <Text accessibilityLabel="Studio Lab" style={styles.brand}>
+      Studio Lab
+    </Text>
+  );
 }
 
 export function AppHeader({
-  title,
-  onBack,
   right,
-  showSettings = true,
-  showProjectPicker = true,
+  showSidebarToggle = true,
   dark = false,
 }: {
-  title?: string;
-  onBack?: () => void;
   right?: React.ReactNode;
-  showSettings?: boolean;
-  showProjectPicker?: boolean;
+  showSidebarToggle?: boolean;
   dark?: boolean;
 }) {
   const router = useRouter();
-  const { settings, tap } = useSettings();
+  const desktop = useDesktopLayout();
+  const { tap } = useSettings();
+  const { open, hasNavigated, toggle } = useSidebar();
+  const showToggle = showSidebarToggle && desktop && !hasNavigated && !open;
 
   return (
     <Container>
       <View style={[styles.bar, dark && styles.barDark]}>
         <View style={styles.left}>
-          {onBack ? (
+          {showToggle ? (
             <IconButton
-              icon="chevron-back"
-              accessibilityLabel="Go back"
+              icon="menu-outline"
+              accessibilityLabel="Show sidebar"
               size={34}
               color={dark ? '#FFFDF8' : theme.text}
-              onPress={onBack}
+              onPress={toggle}
             />
-          ) : (
+          ) : null}
+
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Studio Lab home"
+            onPress={() => {
+              tap('light');
+              router.replace('/');
+            }}
+            style={({ pressed }) => [styles.brandButton, pressed && styles.pressed]}>
             <BrandMark />
-          )}
-          <Text numberOfLines={1} style={[styles.wordmark, dark && styles.wordmarkDark]}>
-            {title ?? 'Reel'}
-          </Text>
-          {showProjectPicker ? <ProjectPicker /> : null}
+          </Pressable>
         </View>
 
         <View style={styles.right}>
-          {settings.testMode ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Demo mode is on. Open settings."
-              onPress={() => {
-                tap('light');
-                router.push('/settings');
-              }}
-              style={({ pressed }) => [styles.demoPill, pressed && styles.pressed]}>
-              <View style={styles.demoDot} />
-              <Text style={styles.demoText}>DEMO</Text>
-            </Pressable>
-          ) : null}
-
           {right}
           <AuthControls />
-          {!right && showSettings ? (
-            <IconButton
-              icon="options-outline"
-              accessibilityLabel="Settings"
-              size={34}
-              onPress={() => router.push('/settings')}
-            />
-          ) : null}
         </View>
       </View>
     </Container>
@@ -90,8 +74,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: theme.space.xl,
-    paddingVertical: 10,
-    gap: theme.space.md,
+    paddingVertical: theme.space.sm,
+    gap: theme.space.lg,
     overflow: 'visible',
     zIndex: 20,
   },
@@ -101,47 +85,25 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: theme.space.md,
   },
-  wordmark: {
+  brand: {
     flexShrink: 0,
     fontFamily: theme.font.sans,
-    fontSize: 14.5,
+    fontSize: 15,
     lineHeight: 20,
-    fontWeight: '600',
+    fontWeight: '700',
     color: theme.text,
-    letterSpacing: -0.18,
+    letterSpacing: -0.25,
   },
-  wordmarkDark: { color: '#FFFDF8' },
+  brandButton: {
+    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
+  },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.space.sm,
-  },
-  demoPill: {
-    height: 25,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 9,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.warningDim,
-    borderWidth: 1,
-    borderColor: '#E8C895',
-    ...Platform.select({ web: { cursor: 'pointer' }, default: {} }),
-  },
-  demoDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.warning,
-  },
-  demoText: {
-    fontFamily: theme.font.mono,
-    fontSize: 9.5,
-    fontWeight: '500',
-    letterSpacing: 0.8,
-    color: theme.warning,
+    flexShrink: 0,
   },
   pressed: { opacity: 0.7 },
 });
