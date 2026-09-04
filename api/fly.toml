@@ -12,7 +12,6 @@ kill_timeout = "30s"
   DATA_DIR = "/data"
   NODE_ENV = "production"
   CORS_ALLOWED_ORIGIN = "https://studiolab.ultron.sh"
-  CLOUDFLARE_ACCESS_TEAM_DOMAIN = "https://sahilagentserver.cloudflareaccess.com"
 
 [[mounts]]
   source = "studio_lab_data"

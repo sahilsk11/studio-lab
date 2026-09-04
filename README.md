@@ -56,14 +56,14 @@ The app also has a demo mode that uses bundled placeholder assets and does not r
 
 ## Production deploy
 
-Architecture mirrors [ag-job-hunt](https://github.com/sahilsk11/ag-job-hunt): Cloudflare Access on the frontend hostname, Pages Functions proxy same-origin `/api/*` and `/media/*` to Fly.io, API verifies the forwarded Access JWT.
+Public app at **https://studiolab.ultron.sh**: Cloudflare Pages serves the Expo web export; Pages Functions proxy same-origin `/api/*` and `/media/*` to Fly.io. **Clerk** handles sign-in; video generation (`POST /api/projects/:id/video`) requires a Clerk session. Anonymous sessions (`X-Anonymous-Session`) cover the rest of the pipeline.
 
-**Continuous deployment:** pushes to `main` run [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — verify frontend and API, then deploy the Fly app (`studio-lab`) and Cloudflare Pages project (`studiolab`). Required GitHub repository secrets: `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Manual `fly deploy` and ad-hoc `wrangler pages deploy` still work as fallbacks.
+**Continuous deployment:** pushes to `main` run [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — verify frontend and API, then deploy the Fly app (`studio-lab`) and Cloudflare Pages project (`studiolab`). Required GitHub repository secrets: `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, and Fly secret `CLERK_SECRET_KEY`. Manual `fly deploy` and ad-hoc `wrangler pages deploy` still work as fallbacks.
 
 | Component | Config | Host |
 |---|---|---|
 | Frontend | `frontend/wrangler.toml` | `https://studiolab.ultron.sh` |
-| Pages Functions | `frontend/functions/` | Proxies to Fly with JWT |
+| Pages Functions | `frontend/functions/` | Proxies `/api/*` and `/media/*` to Fly |
 | API | `api/fly.toml`, `api/Dockerfile` | `https://studio-lab.fly.dev` (internal; browser never calls this) |
 
 ### Build commands
@@ -87,21 +87,17 @@ docker build -t studio-lab-api .
 cd api
 fly apps create studio-lab          # if not exists
 fly volumes create studio_lab_data --region iad --size 1
-fly secrets set CLOUDFLARE_ACCESS_AUD="<AUD from Access app for studiolab.ultron.sh>"
+fly secrets set CLERK_SECRET_KEY="sk_live_..."
 # OPENROUTER_API_KEY is optional until generation is needed:
 # fly secrets set OPENROUTER_API_KEY="sk-or-..."
 fly deploy
 ```
 
-Find the Access application AUD in Cloudflare Zero Trust → Access → Applications → the **studiolab** app (not the `*.ultron.sh` wildcard — studiolab has its own app since the [cloudflare](https://github.com/sahilsk11/cloudflare) Terraform change). `CLOUDFLARE_ACCESS_TEAM_DOMAIN` is already set in `fly.toml` to `https://sahilagentserver.cloudflareaccess.com`.
-
-After creating or rotating the studiolab Access app, update Fly:
+Cloudflare Access on the API is **optional** (set both `CLOUDFLARE_ACCESS_AUD` and `CLOUDFLARE_ACCESS_TEAM_DOMAIN` only if re-enabling beta gating). For the public launch, unset any leftover beta secret:
 
 ```bash
-fly secrets set CLOUDFLARE_ACCESS_AUD="<AUD from studiolab Access app>"
+fly secrets unset CLOUDFLARE_ACCESS_AUD
 ```
-
-If API calls return `unauthorized` (not `Failed to fetch`), the AUD on Fly does not match the JWT from `studiolab.ultron.sh`.
 
 #### 2. Cloudflare Pages
 
@@ -109,17 +105,17 @@ The Pages project name is `studiolab` (direct upload via CI, not Git integration
 
 1. Create a Pages project named `studiolab` if it does not exist (direct upload / no Git source).
 2. **Custom domain:** `studiolab.ultron.sh`
-3. Ensure the Access policy on `*.ultron.sh` includes this hostname (should inherit from wildcard).
+3. In [sahilsk11/cloudflare](https://github.com/sahilsk11/cloudflare), ensure the studiolab Access apps **bypass** (public) so `*.ultron.sh` wildcard gating does not block the hostname.
 4. `API_ORIGIN` in `frontend/wrangler.toml` points at `https://studio-lab.fly.dev`; override in the Pages dashboard if the Fly app name differs.
 
 CI builds from `frontend/` with `EXPO_PUBLIC_API_URL= npm run export:web` and deploys `dist/` plus `frontend/functions/` via Wrangler.
 
 #### 3. Verify
 
-- `GET https://studiolab.ultron.sh/health` → `{"ok":true,...}` (via Pages proxy, after Access login)
-- `GET https://studio-lab.fly.dev/health` → 200 without JWT (Fly health check)
-- `GET https://studio-lab.fly.dev/api/projects` without JWT → 401
-- SPA loads at `https://studiolab.ultron.sh` and API calls stay same-origin
+- `GET https://studiolab.ultron.sh/health` → `{"ok":true,...}` (no Access login)
+- `GET https://studio-lab.fly.dev/health` → 200
+- SPA loads at `https://studiolab.ultron.sh`; API calls stay same-origin
+- Video generation prompts Clerk sign-in; other steps work with an anonymous session
 
 ## Git and runtime data
 

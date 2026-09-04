@@ -44,10 +44,17 @@ describe('Cloudflare Access configuration', () => {
     expect(loadCloudflareAccessConfig({ NODE_ENV: 'development' })).toBeNull();
   });
 
-  it('is required in production', () => {
-    expect(() => loadCloudflareAccessConfig({ NODE_ENV: 'production' })).toThrow(
-      'CLOUDFLARE_ACCESS_AUD and CLOUDFLARE_ACCESS_TEAM_DOMAIN are required in production',
-    );
+  it('is disabled when unset', () => {
+    expect(loadCloudflareAccessConfig({ NODE_ENV: 'production' })).toBeNull();
+  });
+
+  it('requires both audience and team domain when partially configured', () => {
+    expect(() =>
+      loadCloudflareAccessConfig({
+        NODE_ENV: 'production',
+        CLOUDFLARE_ACCESS_AUD: config.audience,
+      }),
+    ).toThrow('CLOUDFLARE_ACCESS_AUD and CLOUDFLARE_ACCESS_TEAM_DOMAIN must both be set');
   });
 
   it('normalizes a bare team domain into an HTTPS issuer', () => {
