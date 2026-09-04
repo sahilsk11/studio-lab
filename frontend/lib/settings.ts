@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { DEFAULT_API_URL } from '@/lib/api';
+import { DEFAULT_API_URL, normalizeApiUrl } from '@/lib/api';
 
 const SETTINGS_KEY = 'reel-studio-settings';
 
@@ -47,7 +47,10 @@ export async function loadSettings(): Promise<AppSettings> {
         typeof saved.showCosts === 'boolean' ? saved.showCosts : DEFAULT_SETTINGS.showCosts,
       budgetCap:
         typeof saved.budgetCap === 'number' ? saved.budgetCap : DEFAULT_SETTINGS.budgetCap,
-      apiUrl: typeof saved.apiUrl === 'string' ? saved.apiUrl : DEFAULT_SETTINGS.apiUrl,
+      apiUrl:
+        typeof saved.apiUrl === 'string'
+          ? normalizeApiUrl(saved.apiUrl)
+          : DEFAULT_SETTINGS.apiUrl,
       testMode:
         typeof saved.testMode === 'boolean' ? saved.testMode : DEFAULT_SETTINGS.testMode,
     };

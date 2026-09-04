@@ -93,7 +93,15 @@ fly secrets set CLOUDFLARE_ACCESS_AUD="<AUD from Access app for studiolab.ultron
 fly deploy
 ```
 
-Find the Access application AUD in Cloudflare Zero Trust → Access → Applications → the app protecting `studiolab.ultron.sh` (or create one matching the ag-job-hunt pattern on `*.ultron.sh`). `CLOUDFLARE_ACCESS_TEAM_DOMAIN` is already set in `fly.toml` to `https://sahilagentserver.cloudflareaccess.com`.
+Find the Access application AUD in Cloudflare Zero Trust → Access → Applications → the **studiolab** app (not the `*.ultron.sh` wildcard — studiolab has its own app since the [cloudflare](https://github.com/sahilsk11/cloudflare) Terraform change). `CLOUDFLARE_ACCESS_TEAM_DOMAIN` is already set in `fly.toml` to `https://sahilagentserver.cloudflareaccess.com`.
+
+After creating or rotating the studiolab Access app, update Fly:
+
+```bash
+fly secrets set CLOUDFLARE_ACCESS_AUD="<AUD from studiolab Access app>"
+```
+
+If API calls return `unauthorized` (not `Failed to fetch`), the AUD on Fly does not match the JWT from `studiolab.ultron.sh`.
 
 #### 2. Cloudflare Pages
 
