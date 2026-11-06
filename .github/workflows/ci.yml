@@ -89,7 +89,7 @@ jobs:
           path: frontend/dist
       - uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          apiToken: ${{ secrets.CF_GH_DEPLOY_STUDIO_LAB }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: frontend
           command: pages deploy dist --project-name=studiolab --branch=main
